@@ -6,9 +6,9 @@ See [AGENTS.md](./AGENTS.md) for project operation rules (session-start backup, 
 
 ## Project status
 
-This repository started as a fast prototype built in one day with Codex (`gpt-5.3-codex-spark xhigh`), using Go + AppleScript + Things URL Scheme.
+This repository started as a fast prototype built in one day with Codex (`gpt-5.3-codex-spark xhigh`), and then continued with `gpt-5.3-codex high`, using Go + AppleScript + Things URL Scheme.
 
-- It is responsive and already useful in practice.
+- It is responsive and already useful in practice using spark.
 - It works well with voice workflows (for example with MacWhisper).
 - It is primarily a proof of concept, not a fully hardened product yet.
 - It still needs cleanup, more refactoring, stronger safety checks, and broader tests.
@@ -42,7 +42,21 @@ ln -sf AGENTS.md CLAUDE.md
 
 The CLI never accesses the Things SQLite database directly.
 Some native checklist operations (URL scheme `update`) require a Things auth token (`THINGS_AUTH_TOKEN` or `--auth-token`).
-Default target list is `Inbox`. You can override it with `THINGS_DEFAULT_LIST` (for example `À classer` on French Things setups).
+Default target list is `Inbox` (English Things UI).
+List names are localized by Things, so use the exact name from your own app language.
+
+Examples:
+
+- English UI: `Inbox`
+- French UI: `À classer`
+
+If your Things language is not English, set:
+
+```bash
+export THINGS_DEFAULT_LIST="À classer"
+```
+
+Or pass `--list` explicitly on each command.
 
 ## Installation
 
