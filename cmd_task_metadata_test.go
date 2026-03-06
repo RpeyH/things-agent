@@ -62,15 +62,23 @@ func TestTaskMetadataCommands(t *testing.T) {
 		setupTestRuntimeWithDB(t, fr)
 
 		setDate := newSetTaskDateCmd()
-		setDate.SetArgs([]string{"--name", "task-a", "--due", "2026-03-06"})
+		setDate.SetArgs([]string{"--name", "task-a", "--due", "2026-03-06", "--deadline", "2026-03-07"})
 		if err := setDate.Execute(); err != nil {
 			t.Fatalf("set-task-date failed: %v", err)
 		}
 
 		clearDate := newSetTaskDateCmd()
-		clearDate.SetArgs([]string{"--name", "task-a", "--clear"})
+		clearDate.SetArgs([]string{"--name", "task-a", "--clear-due", "--clear-deadline"})
 		if err := clearDate.Execute(); err != nil {
 			t.Fatalf("set-task-date --clear failed: %v", err)
+		}
+
+		scripts := strings.Join(fr.allScripts(), "\n")
+		if !strings.Contains(scripts, `set due date of t to date "2026-03-06 00:00:00"`) {
+			t.Fatalf("expected due date AppleScript update, got %s", scripts)
+		}
+		if !strings.Contains(scripts, "things:///update?auth-token=token-test") || !strings.Contains(scripts, "&deadline=2026-03-07") {
+			t.Fatalf("expected deadline URL update, got %s", scripts)
 		}
 	})
 
@@ -88,7 +96,7 @@ func TestTaskMetadataCommands(t *testing.T) {
 		setDate := newSetTaskDateCmd()
 		setDate.SetArgs([]string{"--name", "task-a"})
 		err = setDate.Execute()
-		if err == nil || !strings.Contains(err.Error(), "provide --due, --deadline, or --clear") {
+		if err == nil || !strings.Contains(err.Error(), "provide --due, --deadline, --clear-due, or --clear-deadline") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
@@ -135,13 +143,13 @@ func TestTaskMetadataCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("clear date requires token", func(t *testing.T) {
+	t.Run("clear deadline requires token", func(t *testing.T) {
 		fr := &fakeRunner{}
 		setupTestRuntimeWithDB(t, fr)
 		t.Setenv("THINGS_AUTH_TOKEN", "")
 		config.authToken = ""
 		cmd := newSetTaskDateCmd()
-		cmd.SetArgs([]string{"--name", "task-a", "--clear"})
+		cmd.SetArgs([]string{"--name", "task-a", "--clear-deadline"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "auth-token is required") {
 			t.Fatalf("unexpected error: %v", err)

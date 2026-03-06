@@ -194,7 +194,7 @@ func scriptAppendTaskNotes(bundleID, taskName, notes, separator string) string {
 end tell`, bundleID, scriptResolveTaskByName(taskName), escapeApple(notes), escapeApple(separator), escapeApple(notes))
 }
 
-func scriptSetTaskDate(bundleID, taskName, dueDate, deadlineDate string, clear bool) string {
+func scriptSetTaskDate(bundleID, taskName, dueDate string, clear bool) string {
 	script := fmt.Sprintf(`tell application id "%s"
 %s`, bundleID, scriptResolveTaskByName(taskName))
 	if clear {
@@ -205,19 +205,19 @@ func scriptSetTaskDate(bundleID, taskName, dueDate, deadlineDate string, clear b
 		script += fmt.Sprintf(`  set due date of t to date "%s"
 `, dueDate)
 	}
-	if strings.TrimSpace(deadlineDate) != "" {
-		script += fmt.Sprintf(`  set due date of t to date "%s"
-`, deadlineDate)
-	}
 	script += `  return id of t
 	end tell`
 	return script
 }
 
-func scriptClearTaskDeadlineByName(bundleID, taskName, authToken string) string {
+func scriptSetTaskDeadlineByName(bundleID, taskName, deadlineDate, authToken string) string {
 	return fmt.Sprintf(`tell application id "%s"
 %s  set tid to id of t
 end tell
-open location "things:///update?auth-token=%s&id=" & tid & "&deadline="
-return tid`, bundleID, scriptResolveTaskByName(taskName), escapeApple(thingsQueryEscape(authToken)))
+open location "things:///update?auth-token=%s&id=" & tid & "&deadline=%s"
+return tid`, bundleID, scriptResolveTaskByName(taskName), escapeApple(thingsQueryEscape(authToken)), escapeApple(thingsQueryEscape(deadlineDate)))
+}
+
+func scriptClearTaskDeadlineByName(bundleID, taskName, authToken string) string {
+	return scriptSetTaskDeadlineByName(bundleID, taskName, "", authToken)
 }

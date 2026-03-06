@@ -195,7 +195,7 @@ func newAppendTaskNotesCmd() *cobra.Command {
 
 func newSetTaskDateCmd() *cobra.Command {
 	var name, due, deadline string
-	var clear bool
+	var clearDue, clearDeadline bool
 	cmd := &cobra.Command{
 		Use:   "set-task-date",
 		Short: "Set/update task due date",
@@ -216,26 +216,37 @@ func newSetTaskDateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if !clear && dueDate == "" && deadlineDate == "" {
-				return errors.New("provide --due, --deadline, or --clear")
+			if !clearDue && !clearDeadline && dueDate == "" && deadlineDate == "" {
+				return errors.New("provide --due, --deadline, --clear-due, or --clear-deadline")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			if clear && dueDate == "" && deadlineDate == "" {
+			if clearDue || dueDate != "" {
+				if err := runResult(ctx, cfg, scriptSetTaskDate(cfg.bundleID, name, dueDate, clearDue)); err != nil {
+					return err
+				}
+			}
+			if clearDeadline || deadlineDate != "" {
 				token, err := requireAuthToken(cfg)
 				if err != nil {
 					return err
 				}
-				return runResult(ctx, cfg, scriptClearTaskDeadlineByName(cfg.bundleID, name, token))
+				if clearDeadline && deadlineDate == "" {
+					return runResult(ctx, cfg, scriptClearTaskDeadlineByName(cfg.bundleID, name, token))
+				}
+				if err := runResult(ctx, cfg, scriptSetTaskDeadlineByName(cfg.bundleID, name, deadlineDate, token)); err != nil {
+					return err
+				}
 			}
-			return runResult(ctx, cfg, scriptSetTaskDate(cfg.bundleID, name, dueDate, deadlineDate, clear))
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Task name")
 	cmd.Flags().StringVar(&due, "due", "", "New due date (YYYY-MM-DD [HH:mm[:ss]])")
-	cmd.Flags().StringVar(&deadline, "deadline", "", "Due date alias (same format)")
-	cmd.Flags().BoolVar(&clear, "clear", false, "Clear due date")
+	cmd.Flags().StringVar(&deadline, "deadline", "", "New deadline (YYYY-MM-DD [HH:mm[:ss]])")
+	cmd.Flags().BoolVar(&clearDue, "clear-due", false, "Clear due date")
+	cmd.Flags().BoolVar(&clearDeadline, "clear-deadline", false, "Clear deadline")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }

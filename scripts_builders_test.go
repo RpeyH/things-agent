@@ -85,13 +85,23 @@ func TestScriptAppendTaskNotesDefaultSeparator(t *testing.T) {
 	}
 }
 
-func TestScriptSetTaskDateClearAndDeadline(t *testing.T) {
-	s := scriptSetTaskDate(defaultBundleID, "task", "", "2026-03-06 00:00:00", true)
+func TestScriptSetTaskDateClearsAndSetsDueOnly(t *testing.T) {
+	s := scriptSetTaskDate(defaultBundleID, "task", "2026-03-06 00:00:00", true)
 	if !strings.Contains(s, "set due date of t to missing value") {
 		t.Fatalf("expected clear due date step: %s", s)
 	}
 	if !strings.Contains(s, `set due date of t to date "2026-03-06 00:00:00"`) {
-		t.Fatalf("expected deadline date set: %s", s)
+		t.Fatalf("expected due date set: %s", s)
+	}
+}
+
+func TestScriptSetTaskDeadlineByNameUsesURLScheme(t *testing.T) {
+	s := scriptSetTaskDeadlineByName(defaultBundleID, "task", "2026-03-07", "t o")
+	if !strings.Contains(s, "things:///update?auth-token=t%20o") {
+		t.Fatalf("expected auth token in URL update script: %s", s)
+	}
+	if !strings.Contains(s, "&deadline=2026-03-07") {
+		t.Fatalf("expected deadline in URL update script: %s", s)
 	}
 }
 
