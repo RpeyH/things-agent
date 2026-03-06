@@ -812,7 +812,7 @@ func newAddTaskCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := runResult(ctx, cfg, scriptSetChecklistByID(cfg.bundleID, taskID, subtasksList, token)); err != nil {
+				if _, err := cfg.runner.run(ctx, scriptSetChecklistByID(cfg.bundleID, taskID, subtasksList, token)); err != nil {
 					return err
 				}
 			}
@@ -875,7 +875,7 @@ func newAddListCmd() *cobra.Command {
 				return err
 			}
 			script := fmt.Sprintf(`tell application id "%s"
-  make new list with properties {name:"%s"}
+  make new area with properties {name:"%s"}
   return "ok"
 end tell`, cfg.bundleID, escapeApple(name))
 			return runResult(ctx, cfg, script)
@@ -1320,6 +1320,13 @@ func newSetTaskDateCmd() *cobra.Command {
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
+			}
+			if clear && dueDate == "" && deadlineDate == "" {
+				token, err := requireAuthToken(cfg)
+				if err != nil {
+					return err
+				}
+				return runResult(ctx, cfg, scriptClearTaskDeadlineByName(cfg.bundleID, name, token))
 			}
 			return runResult(ctx, cfg, scriptSetTaskDate(cfg.bundleID, name, dueDate, deadlineDate, clear))
 		},
@@ -1800,15 +1807,24 @@ func scriptSetTaskDate(bundleID, taskName, dueDate, deadlineDate string, clear b
 `, deadlineDate)
 	}
 	script += `  return id of t
-end tell`
+	end tell`
 	return script
 }
 
-func scriptSetTaskTags(bundleID, taskName string, tags []string) string {
+func scriptClearTaskDeadlineByName(bundleID, taskName, authToken string) string {
 	return fmt.Sprintf(`tell application id "%s"
-%s  set tag names of t to %s
+%s  set tid to id of t
+end tell
+open location "things:///update?auth-token=%s&id=" & tid & "&deadline="
+return tid`, bundleID, scriptResolveTaskByName(taskName), escapeApple(url.QueryEscape(authToken)))
+}
+
+func scriptSetTaskTags(bundleID, taskName string, tags []string) string {
+	tagText := strings.Join(tags, ", ")
+	return fmt.Sprintf(`tell application id "%s"
+%s  set tag names of t to "%s"
   return id of t
-end tell`, bundleID, scriptResolveTaskByName(taskName), scriptListLiteral(tags))
+end tell`, bundleID, scriptResolveTaskByName(taskName), escapeApple(tagText))
 }
 
 func scriptAddTaskTags(bundleID, taskName string, tags []string) string {
@@ -1819,13 +1835,18 @@ func scriptAddTaskTags(bundleID, taskName string, tags []string) string {
   end try
   if existingTags is missing value then
     set existingTags to {}
+  else if class of existingTags is text then
+    set existingTags to {existingTags as string}
   end if
   repeat with aTag in %s
     if not (aTag is in existingTags) then
       set end of existingTags to (aTag as string)
     end if
   end repeat
-  set tag names of t to existingTags
+  set AppleScript's text item delimiters to ", "
+  set mergedTagsText to existingTags as text
+  set AppleScript's text item delimiters to ""
+  set tag names of t to mergedTagsText
   return id of t
 end tell`, bundleID, scriptResolveTaskByName(taskName), scriptListLiteral(tags))
 }
@@ -1838,6 +1859,8 @@ func scriptRemoveTaskTags(bundleID, taskName string, tags []string) string {
   end try
   if existingTags is missing value then
     set existingTags to {}
+  else if class of existingTags is text then
+    set existingTags to {existingTags as string}
   end if
   set filteredTags to {}
   repeat with aTag in existingTags
@@ -1845,7 +1868,10 @@ func scriptRemoveTaskTags(bundleID, taskName string, tags []string) string {
       set end of filteredTags to aTag
     end if
   end repeat
-  set tag names of t to filteredTags
+  set AppleScript's text item delimiters to ", "
+  set filteredTagsText to filteredTags as text
+  set AppleScript's text item delimiters to ""
+  set tag names of t to filteredTagsText
   return id of t
 end tell`, bundleID, scriptResolveTaskByName(taskName), scriptListLiteral(tags))
 }
