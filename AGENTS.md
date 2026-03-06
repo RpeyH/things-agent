@@ -1,76 +1,82 @@
-# AGENTS - agent-things
+# AGENTS - things-agent
 
-Ce fichier définit les règles pour le repo **agent-things** (CLI Things 3 via AppleScript).
+This file defines operating rules for the **things-agent** repository (Things 3 CLI via AppleScript).
 
-## Démarrage de session
+## Session Start
 
-- Toujours considérer cette règle comme prioritaire pour ce dossier.
-- À chaque nouvelle session d’interaction qui manipule ce projet, déclencher un backup initial via :
-  - `agent-things session-start`
-  - ou `agent-things backup --dir backups` selon l’implémentation courante
-- Le CLI garde en permanence **au maximum 50 backups** (supprime les plus anciens après création d’un nouveau backup).
-- Format des backups exigé : `YYYY-MM-DD:HH-MM-SS`.
+- Always treat this rule as top priority for this repository.
+- For each new interaction session touching this project, trigger an initial backup via:
+  - `things-agent session-start`
+  - or `things-agent backup` depending on current implementation
+- The CLI keeps at most **50 backups** at all times (oldest are removed after creating a new backup).
+- Required backup timestamp format: `YYYY-MM-DD:HH-MM-SS`.
 
-## Règle d’accès aux données
+## Data Access Rule
 
-- L’agent **n’interagit jamais directement** avec la base de données Things (`.thingsdatabase`).
-- Toutes les opérations passent uniquement par des appels **AppleScript** via le CLI.
+- The agent must **never** interact directly with the Things database (`.thingsdatabase`).
+- All operations must go through controlled AppleScript calls exposed by the CLI.
 
-## Règles de comportement général du CLI
+## Strict CLI-Only Execution Rule
 
-- Utiliser `agent-things` pour toutes les opérations (et non la CLI système non contrôlée).
-- Vérifier l’état de santé du CLI avant une action longue :
-  - `agent-things version` si disponible
-  - `agent-things --help`
-- En cas d’échec, rapporter clairement la commande exécutée et l’erreur reçue.
-- Éviter les opérations destructrices non idempotentes sans backup.
+- The agent must **only** use `things-agent` commands to change Things state.
+- No bypass allowed via ad hoc AppleScript, manual URL Scheme calls, UI automation, or any direct call outside the CLI.
+- If a feature is missing in the CLI (for example, emptying trash), the agent must propose adding it to the CLI, **not** bypassing it.
 
-## Opérations attendues à implémenter / documenter
+## General CLI Behavior
 
-- Recherche et consultation :
-  - Rechercher une tâche : `agent-things task search <query>`
-  - Recherche globale : `agent-things search <query>`
-  - Consulter les tâches du jour / en cours si supporté.
-- Projets :
-  - Lister projets
-  - Ajouter un projet
-  - Mettre à jour / éditer un projet
-  - Supprimer un projet
-- Domaines :
-  - Lister les domaines
-  - Ajouter un domaine
-  - Éditer un domaine
-  - Supprimer un domaine
-- Tâches :
-  - Ajouter une tâche
-  - Éditer une tâche
-  - Supprimer une tâche
-  - Marquer une tâche réalisée
-  - Consulter une tâche (id, nom, statut, échéance, tags, notes, sous-tâches)
-  - Gérer les notes associées
-  - Gérer les sous-tâches
-- Délais / dates :
-  - Définir/mettre à jour `deadline` et `due date`
-  - Supporter les formats de date cohérents (ISO/locales selon input)
-  - Tenir compte du fuseau horaire local
-- Tags :
-  - Ajouter des tags
-  - Retirer des tags
-  - Filtrer / rechercher par tags
+- Use `things-agent` for all operations (not uncontrolled system commands against Things).
+- Check CLI health before long actions:
+  - `things-agent version` if available
+  - `things-agent --help`
+- On failure, clearly report the executed command and returned error.
+- Avoid non-idempotent destructive operations without backup.
+
+## Expected Operations to Implement / Document
+
+- Search and read:
+  - Search a task: `things-agent task search <query>`
+  - Global search: `things-agent search <query>`
+  - View today/in-progress tasks if supported.
+- Projects:
+  - List projects
+  - Add a project
+  - Update/edit a project
+  - Delete a project
+- Areas/lists:
+  - List areas/lists
+  - Add an area/list
+  - Edit an area/list
+  - Delete an area/list
+- Tasks:
+  - Add a task
+  - Edit a task
+  - Delete a task
+  - Mark task completed
+  - View a task (id, name, status, due/deadline, tags, notes, subtasks/checklist)
+  - Manage notes
+  - Manage subtasks/checklist items
+- Dates:
+  - Set/update `deadline` and due fields
+  - Support coherent date formats (ISO/localized based on input)
+  - Respect local timezone
+- Tags:
+  - Add tags
+  - Remove tags
+  - Filter/search by tags
 
 ## Backup via CLI
 
-- Commande de backup côté CLI obligatoire pour changer d’état critique.
-- Le backup doit être écrit dans le répertoire `backups/` sous le data dir Things.
-- Le fichier de backup doit suivre l’horodatage exact `YYYY-MM-DD:HH-MM-SS`.
-- Conserver **au maximum 50** backups les plus récents.
+- Backup command in CLI is mandatory before critical state changes.
+- Backup must be written in `backups/` under the Things data directory.
+- Backup files must follow timestamp format `YYYY-MM-DD:HH-MM-SS`.
+- Keep at most **50** most recent backups.
 
-## Convention d’exécution
+## Execution Convention
 
-- Préférer les commandes atomiques et explicites.
-- Quand plusieurs opérations dépendent d’un état, exécuter dans l’ordre :
+- Prefer atomic and explicit commands.
+- When multiple operations depend on shared state, execute in this order:
   1. backup
-  2. action(s) de lecture/écriture
-  3. vérification
-- Documenter les IDs renvoyés par Things et les effets attendus.
-- Si une commande AppleScript est indisponible sur la machine/CI, expliciter le fallback et ne pas modifier la base manuellement.
+  2. read/write action(s)
+  3. verification
+- Document IDs returned by Things and expected effects.
+- If AppleScript command support is unavailable on the machine/CI, explain fallback clearly and never modify the database manually.
