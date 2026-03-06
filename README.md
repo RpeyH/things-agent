@@ -108,6 +108,17 @@ Use this project at your own risk.
 
 Do not expose your Things auth token to your AI provider unless strictly necessary.
 
+Get the token on macOS:
+
+1. Open `Things 3`.
+2. Go to `Things -> Settings -> General`.
+3. In the `Things URLs` section, open token management and copy the auth token.
+4. Export it in your shell:
+
+```bash
+export THINGS_AUTH_TOKEN="<your-token>"
+```
+
 A practical approach is to store the token with `pass` and only resolve it locally in shell config:
 
 ```bash
@@ -138,17 +149,6 @@ ln -sf AGENTS.md CLAUDE.md
 # quick health check
 things-agent version
 things-agent session-start
-```
-
-## Get the Things 3 auth token on macOS
-
-1. Open `Things 3`.
-2. Go to `Things -> Settings -> General`.
-3. In the `Things URLs` section, open token management and copy the auth token.
-4. Export it in your shell:
-
-```bash
-export THINGS_AUTH_TOKEN="<your-token>"
 ```
 
 ## Usage
