@@ -14,9 +14,20 @@ end tell`, bundleID)
 func scriptResolveTaskByName(taskName string) string {
 	taskName = escapeApple(taskName)
 	return fmt.Sprintf(`  try
-    set t to first project whose name is "%s"
-  on error
-    set t to first «class tstk» whose name is "%s"
+    set projectMatches to every project whose name is "%s"
+    set taskMatches to every «class tstk» whose name is "%s"
+    set projectCount to count of projectMatches
+    set taskCount to count of taskMatches
+    set totalCount to projectCount + taskCount
+    if totalCount is 0 then error "No item found with this name."
+    if totalCount is greater than 1 then error "Ambiguous item name; use a unique name."
+    if projectCount is 1 then
+      set t to item 1 of projectMatches
+    else
+      set t to item 1 of taskMatches
+    end if
+  on error errMsg
+    error errMsg
   end try
 `, taskName, taskName)
 }

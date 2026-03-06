@@ -40,4 +40,10 @@ func TestScriptResolveTaskByNameEscapesInput(t *testing.T) {
 	if !strings.Contains(got, `\"bar\"`) {
 		t.Fatalf("expected escaped task name, got: %s", got)
 	}
+	if !strings.Contains(got, "Ambiguous item name; use a unique name.") {
+		t.Fatalf("expected ambiguity guard, got: %s", got)
+	}
+	if !strings.Contains(got, "set totalCount to projectCount + taskCount") {
+		t.Fatalf("expected combined match count, got: %s", got)
+	}
 }
