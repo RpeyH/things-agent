@@ -10,9 +10,6 @@ import (
 )
 
 func scriptAddTask(bundleID, listName, name, notes, tags, due string) string {
-	if strings.TrimSpace(listName) == "" {
-		listName = envOrDefault("THINGS_DEFAULT_LIST", defaultListName)
-	}
 	parts := []string{fmt.Sprintf(`name:"%s"`, escapeApple(name))}
 	if strings.TrimSpace(notes) != "" {
 		parts = append(parts, fmt.Sprintf(`notes:"%s"`, escapeApple(notes)))
@@ -97,9 +94,6 @@ func scriptListLiteral(values []string) string {
 }
 
 func scriptAddProject(bundleID, listName, name, notes string) string {
-	if strings.TrimSpace(listName) == "" {
-		listName = envOrDefault("THINGS_DEFAULT_LIST", defaultListName)
-	}
 	script := fmt.Sprintf(`tell application id "%s"
   set targetList to first list whose name is "%s"
   set p to make new project at end of to dos of targetList with properties {name:"%s"}

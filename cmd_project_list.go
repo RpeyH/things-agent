@@ -22,6 +22,10 @@ func newAddProjectCmd() *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
+			listName = resolveDestinationListName(listName)
+			if listName == "" {
+				return errors.New("destination is required: use --list or THINGS_DEFAULT_LIST")
+			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
@@ -30,7 +34,7 @@ func newAddProjectCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Project name")
 	cmd.Flags().StringVar(&notes, "notes", "", "Notes")
-	cmd.Flags().StringVar(&listName, "list", envOrDefault("THINGS_DEFAULT_LIST", defaultListName), "Destination area")
+	cmd.Flags().StringVar(&listName, "list", "", "Destination area")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }

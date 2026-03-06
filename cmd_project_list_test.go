@@ -83,6 +83,14 @@ func TestProjectListCommands(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "--name is required") {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
+		t.Setenv("THINGS_DEFAULT_LIST", "")
+		addProjectMissingDestination := newAddProjectCmd()
+		addProjectMissingDestination.SetArgs([]string{"--name", "p1"})
+		err = addProjectMissingDestination.Execute()
+		if err == nil || !strings.Contains(err.Error(), "destination is required") {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	})
 
 	t.Run("delete unknown kind errors", func(t *testing.T) {

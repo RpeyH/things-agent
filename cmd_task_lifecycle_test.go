@@ -51,7 +51,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: "task-id-1"}
 		setupTestRuntimeWithDB(t, fr)
 		cmd := newAddTaskCmd()
-		cmd.SetArgs([]string{"--name", "task-a", "--due", "not-a-date"})
+		cmd.SetArgs([]string{"--name", "task-a", "--list", "Inbox", "--due", "not-a-date"})
 		err := cmd.Execute()
 		if err == nil {
 			t.Fatal("expected date parse error")
@@ -62,9 +62,22 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: ""}
 		setupTestRuntimeWithDB(t, fr)
 		cmd := newAddTaskCmd()
-		cmd.SetArgs([]string{"--name", "task-a"})
+		cmd.SetArgs([]string{"--name", "task-a", "--list", "Inbox"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "could not retrieve created task id") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("add task requires explicit destination", func(t *testing.T) {
+		fr := &fakeRunner{output: "task-id-1"}
+		setupTestRuntimeWithDB(t, fr)
+		t.Setenv("THINGS_DEFAULT_LIST", "")
+
+		cmd := newAddTaskCmd()
+		cmd.SetArgs([]string{"--name", "task-a"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "destination is required") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

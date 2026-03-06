@@ -13,7 +13,6 @@ const (
 	backupDirName     = "backups"
 	backupTSFormat    = "2006-01-02:15-04-05"
 	maxBackupsToKeep  = 50
-	defaultListName   = "Inbox"
 	cliVersion        = "0.3.0"
 	thingsDataPattern = "Library/Group Containers/*.com.culturedcode.ThingsMac/ThingsData-*/Things Database.thingsdatabase"
 )

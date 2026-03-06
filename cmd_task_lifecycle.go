@@ -8,6 +8,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func resolveDestinationListName(value string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	return envOrDefault("THINGS_DEFAULT_LIST", "")
+}
+
 func newShowTaskCmd() *cobra.Command {
 	var name string
 	var withSubtasks bool
@@ -47,6 +55,10 @@ func newAddTaskCmd() *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
+			listName = resolveDestinationListName(listName)
+			if listName == "" {
+				return errors.New("destination is required: use --list or THINGS_DEFAULT_LIST")
+			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
@@ -55,7 +67,7 @@ func newAddTaskCmd() *cobra.Command {
 				return err
 			}
 			subtasksList := parseCSVList(subtasks)
-			out, err := cfg.runner.run(ctx, scriptAddTask(cfg.bundleID, strings.TrimSpace(listName), name, notes, tags, dueDate))
+			out, err := cfg.runner.run(ctx, scriptAddTask(cfg.bundleID, listName, name, notes, tags, dueDate))
 			if err != nil {
 				return err
 			}
@@ -79,7 +91,7 @@ func newAddTaskCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Task name")
 	cmd.Flags().StringVar(&notes, "notes", "", "Notes")
 	cmd.Flags().StringVar(&tags, "tags", "", "Tags (comma-separated)")
-	cmd.Flags().StringVar(&listName, "list", envOrDefault("THINGS_DEFAULT_LIST", defaultListName), "Destination area")
+	cmd.Flags().StringVar(&listName, "list", "", "Destination area")
 	cmd.Flags().StringVar(&due, "due", "", "Due date (YYYY-MM-DD [HH:mm[:ss]])")
 	cmd.Flags().StringVar(&subtasks, "subtasks", "", "Subtasks (name1, name2, ...)")
 	_ = cmd.MarkFlagRequired("name")
