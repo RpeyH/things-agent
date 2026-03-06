@@ -164,6 +164,11 @@ things-agent add-task --name "Native checklist" --subtasks "Point 1, Point 2" --
 things-agent complete-task --name "Say hello"
 things-agent list-subtasks --task "Say hello"
 things-agent add-subtask --task "Say hello" --name "Review the message"
+things-agent tags list
+things-agent tags search --query "work"
+things-agent tags add --name "urgent"
+things-agent tags edit --name "urgent" --new-name "high-priority"
+things-agent tags delete --name "high-priority"
 things-agent url add --title "URL task" --tags "test"
 things-agent url update --id "<todo-id>" --append-checklist-items "one, two" --auth-token "<token>"
 ```
@@ -174,6 +179,7 @@ things-agent url update --id "<todo-id>" --append-checklist-items "one, two" --a
 | --- | --- | --- |
 | Session and backup | `session-start`, `backup`, `restore [--file <path or timestamp>]` | Backup-first workflow |
 | Core listing/search | `lists`, `projects`, `tasks [--list <name>] [--query <text>]`, `search --query <text> [--list <name>]` | Works with localized list names |
+| Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task`, `edit-task`, `delete-task`, `complete-task`, `uncomplete-task` | Standard to-do operations |
 | Task metadata | `set-task-notes`, `append-task-notes`, `set-task-date` | Notes and date updates |
 | Tags | `set-tags`, `set-task-tags`, `add-task-tags`, `remove-task-tags` | Exact set and incremental updates |

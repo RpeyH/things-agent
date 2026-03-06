@@ -50,6 +50,11 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent restore [--file <path or timestamp>]` | Restore a backup | yes | Critical operation |
 | `things-agent lists` | List Things areas/lists | no | Read operation |
 | `things-agent projects` | List projects | no | Read operation |
+| `things-agent tags list [--query <text>]` | List tags | no | Read operation |
+| `things-agent tags search --query <text>` | Search tags by name | no | Read operation |
+| `things-agent tags add --name <name> [--parent <name>]` | Create a tag | yes | Write operation |
+| `things-agent tags edit --name <name> ...` | Edit a tag name/parent | yes | Write operation |
+| `things-agent tags delete --name <name>` | Delete a tag | yes | Destructive |
 | `things-agent tasks [--list <name>] [--query <text>]` | List tasks with optional filters | no | Read operation |
 | `things-agent search --query <text> [--list <name>]` | Search tasks | no | Read operation |
 | `things-agent show-task --name <name>` | Show full task/project details | no | Includes metadata |
@@ -115,9 +120,11 @@ The agent should treat this table as the current command surface of the CLI.
   - Support coherent date formats (ISO/localized based on input)
   - Respect local timezone
 - Tags:
-  - Add tags
-  - Remove tags
-  - Filter/search by tags
+  - Search tags: `things-agent tags search --query <query>`
+  - Add a tag: `things-agent tags add --name <name> [--parent <parent>]`
+  - Edit a tag: `things-agent tags edit --name <name> [--new-name <name>] [--parent <parent>]`
+  - Delete a tag: `things-agent tags delete --name <name>`
+  - Set tags on tasks/projects: `set-tags`, `set-task-tags`, `add-task-tags`, `remove-task-tags`
 
 ## Backup via CLI
 
