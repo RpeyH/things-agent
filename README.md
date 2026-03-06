@@ -87,20 +87,24 @@ Using only one of the two is not enough for the intended Codex/Claude workflow.
 
 Use this project at your own risk.
 
+### Agent Risk Model
+
 - To be useful, AI agents often need broad system permissions.
 - Agents can bypass expectations or instructions if they are sufficiently capable.
 - This repository includes safety rails, but not a full safety harness.
 - You remain fully responsible for what the agent executes on your machine.
 
-Additional guardrails implemented here:
+### Safety personal choice
 
+- Emptying Things trash is intentionally not exposed by the CLI.
+- This is a deliberate safety decision to avoid irreversible bulk deletion by script.
+- Deletion remains available item by item (`delete-task`, `delete-project`, `delete-list`) with backup beforehand.
 - `session-start` backup is required in agent instructions before state-changing operations.
 - Backups are rotated and capped at 50 snapshots (about ~7 MB each on the author's machine).
 - `AGENTS.md` explicitly forbids direct SQLite access.
-- Emptying Things trash is intentionally not exposed by the CLI.
 - Bypassing CLI constraints through alternative command paths requires explicit user decision and responsibility.
 
-### Auth token handling recommendation
+### Auth Token Handling
 
 Do not expose your Things auth token to your AI provider unless strictly necessary.
 
@@ -179,12 +183,6 @@ things-agent url update --id "<todo-id>" --append-checklist-items "one, two" --a
 | URL Scheme bridge | `url add|update|add-project|update-project|show|search|version|add-json` | Direct mapping of Things URL Scheme |
 | CLI info | `version` | Print CLI version |
 | Checklist shortcut | `add-task --subtasks "a, b"` | Creates native checklist, requires `--auth-token` or `THINGS_AUTH_TOKEN` |
-
-### Safety personal choice
-
-- The Things trash-empty command is intentionally not exposed in this CLI.
-- This is a deliberate safety decision to avoid irreversible bulk deletion by script.
-- Deletion remains available item by item (`delete-task`, `delete-project`, `delete-list`) with backup beforehand.
 
 ### URL Scheme API Mapping
 
