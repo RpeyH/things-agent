@@ -15,7 +15,11 @@ This repository started as a fast prototype built in one day with Codex (`gpt-5.
 
 The project is intended to work with Codex and Claude Code today, and should also be usable from other local-agent setups (for example Cline), but this has not been fully validated yet.
 
-Repository: `github.com/alnah/things-agent`
+For Claude Code, the convention is to read instructions from `CLAUDE.md`, while this project keeps `AGENTS.md` as the source of truth. The recommended setup is to create a symlink so both tools read exactly the same instructions:
+
+```bash
+ln -sf AGENTS.md CLAUDE.md
+```
 
 ## AI Agent Usage
 
@@ -55,7 +59,7 @@ go install github.com/alnah/things-agent@main
 
 Releases are built from `v*` tags with GoReleaser.
 
-## Hybrid setup for AI agents (required)
+## Hybrid setup for AI agents required
 
 For this project, installation is intentionally hybrid:
 
@@ -64,7 +68,7 @@ For this project, installation is intentionally hybrid:
 
 Using only one of the two is not enough for the intended Codex/Claude workflow.
 
-## Security warning (read before use)
+## Security warning read before use
 
 Use this project at your own risk.
 
@@ -117,7 +121,7 @@ things-agent version
 things-agent session-start
 ```
 
-## Get the Things 3 auth token (macOS)
+## Get the Things 3 auth token on macOS
 
 1. Open `Things 3`.
 2. Go to `Things -> Settings -> General`.
@@ -163,7 +167,7 @@ things-agent url update --id "<todo-id>" --append-checklist-items "one, two" --a
 - `set-task-tags`, `add-task-tags`, `remove-task-tags`
 - `version`
 
-### Safety (Personal Choice)
+### Safety personal choice
 
 - The Things trash-empty command is intentionally not exposed in this CLI.
 - This is a deliberate safety decision to avoid irreversible bulk deletion by script.
