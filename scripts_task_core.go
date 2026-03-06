@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"net/url"
+	"io"
 	"strings"
 )
 
@@ -66,14 +68,19 @@ return tid`, bundleID, escapeApple(taskName), escapeApple(thingsQueryEscape(auth
 }
 
 func parseCSVList(value string) []string {
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
+	reader := csv.NewReader(strings.NewReader(value))
+	reader.TrimLeadingSpace = true
+	fields, err := reader.Read()
+	if err != nil && !errors.Is(err, io.EOF) {
+		fields = strings.Split(value, ",")
+	}
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
 			continue
 		}
-		out = append(out, p)
+		out = append(out, field)
 	}
 	return out
 }

@@ -38,6 +38,19 @@ func TestNormalizeChecklistInputCSVAndMultiline(t *testing.T) {
 	}
 }
 
+func TestParseCSVListSupportsQuotedFields(t *testing.T) {
+	got := parseCSVList(`one,"two, too"," three "`)
+	want := []string{"one", "two, too", "three"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected CSV field count: got=%v want=%v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("unexpected CSV field %d: got=%q want=%q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestScriptSetChecklistByIDUsesEscapedTokenAndItems(t *testing.T) {
 	s := scriptSetChecklistByID(defaultBundleID, "abc", []string{"one", "two words"}, "t o")
 	if !strings.Contains(s, "auth-token=t%20o") {
