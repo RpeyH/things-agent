@@ -4,6 +4,19 @@ Go CLI to drive Things (macOS) through AppleScript only, built with `cobra`.
 
 See [AGENTS.md](./AGENTS.md) for project operation rules (session-start backup, retention, safety, conventions).
 
+## Project status
+
+This repository started as a fast prototype built in one day with Codex (`gpt-5.3-codex-spark xhigh`), using Go + AppleScript + Things URL Scheme.
+
+- It is responsive and already useful in practice.
+- It works well with voice workflows (for example with MacWhisper).
+- It is primarily a proof of concept, not a fully hardened product yet.
+- It still needs cleanup, more refactoring, stronger safety checks, and broader tests.
+
+The project is intended to work with Codex and Claude Code today, and should also be usable from other local-agent setups (for example Cline), but this has not been fully validated yet.
+
+Repository: `github.com/alnah/things-agent`
+
 ## AI Agent Usage
 
 This repository is intended to work with both Codex and Claude Code.
@@ -28,36 +41,94 @@ Default target list is `Inbox`. You can override it with `THINGS_DEFAULT_LIST` (
 
 ## Installation
 
+Install from tags (recommended):
+
 ```bash
-cd things-agent
-go mod tidy
-go install .
+go install github.com/alnah/things-agent@latest
 ```
 
-You can also choose a different binary name at build time.
+Install the unstable version (latest `main`):
+
+```bash
+go install github.com/alnah/things-agent@main
+```
+
+Releases are built from `v*` tags with GoReleaser.
+
+## Hybrid setup for AI agents (required)
+
+For this project, installation is intentionally hybrid:
+
+- `go install` gives you the executable.
+- `git clone` gives your AI agent the repository context (`AGENTS.md`, docs, workflows, security constraints).
+
+Using only one of the two is not enough for the intended Codex/Claude workflow.
+
+## Security warning (read before use)
+
+Use this project at your own risk.
+
+- To be useful, AI agents often need broad system permissions.
+- Agents can bypass expectations or instructions if they are sufficiently capable.
+- This repository includes safety rails, but not a full safety harness.
+- You remain fully responsible for what the agent executes on your machine.
+
+Additional guardrails implemented here:
+
+- `session-start` backup is required in agent instructions before state-changing operations.
+- Backups are rotated and capped at 50 snapshots (about ~7 MB each on the author's machine).
+- `AGENTS.md` explicitly forbids direct SQLite access.
+- Emptying Things trash is intentionally not exposed by the CLI.
+- Bypassing CLI constraints through alternative command paths requires explicit user decision and responsibility.
+
+### Auth token handling recommendation
+
+Do not expose your Things auth token to your AI provider unless strictly necessary.
+
+A practical approach is to store the token with `pass` and only resolve it locally in shell config:
+
+```bash
+# example pattern
+export THINGS_AUTH_TOKEN="$(pass show things/auth-token)"
+```
+
+This reduces accidental exposure, but it is not a perfect guarantee. If an agent is allowed and motivated to exfiltrate secrets, it may still leak the token.
 
 ## Setup for AI Agents
 
 Use this checklist before running the project with Codex or Claude Code:
 
 ```bash
-# 1) install the CLI
+# 1) clone repository (AI context + instructions)
+git clone https://github.com/alnah/things-agent.git
 cd things-agent
-go mod tidy
-go install .
 
-# 2) optional runtime env (example for French Things setup)
+# 2) install CLI binary
+go install github.com/alnah/things-agent@main
+
+# 3) optional runtime env (example for French Things setup)
 export THINGS_DEFAULT_LIST="À classer"
 
-# 3) required for URL update/checklist operations
+# 4) required for URL update/checklist operations
 export THINGS_AUTH_TOKEN="<your-things-token>"
 
-# 4) keep one instruction source for Codex + Claude Code
+# 5) keep one instruction source for Codex + Claude Code
 ln -sf AGENTS.md CLAUDE.md
 
-# 5) quick health check
+# 6) quick health check
 things-agent version
 things-agent session-start
+```
+
+## Get the Things 3 auth token (macOS)
+
+1. Open `Things 3`.
+2. Go to `Things -> Settings -> General`.
+3. In the `Things URLs` section, open token management and copy the auth token.
+4. Export it in your shell:
+
+```bash
+export THINGS_AUTH_TOKEN="<your-token>"
 ```
 
 ## Usage
