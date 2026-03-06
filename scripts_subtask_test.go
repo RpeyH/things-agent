@@ -10,6 +10,12 @@ func TestScriptSubtaskListingAndShow(t *testing.T) {
 	if !strings.Contains(list, "set subtasks to to dos of t") {
 		t.Fatalf("unexpected list-subtasks script: %s", list)
 	}
+	if !strings.Contains(list, `return "status:empty"`) {
+		t.Fatalf("expected empty status marker: %s", list)
+	}
+	if !strings.Contains(list, `on error errMsg number errNum`) || !strings.Contains(list, `status:unsupported`) {
+		t.Fatalf("expected unsupported status marker: %s", list)
+	}
 
 	showWith := scriptShowTask("bundle.id", "task", true)
 	if !strings.Contains(showWith, "if true then") {

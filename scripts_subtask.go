@@ -10,26 +10,22 @@ func scriptListSubtasks(bundleID, taskName string) string {
 	return fmt.Sprintf(`tell application id "%s"
 %s  try
     set subtasks to to dos of t
-    set out to ""
-    repeat with i from 1 to count subtasks
-      set s to item i of subtasks
-      set outLine to (i as string) & ". " & (name of s)
-      if (notes of s is not missing value) and (notes of s is not "") then
-        set outLine to outLine & " | " & (notes of s)
-      end if
-      if out is "" then
-        set out to outLine
-      else
-        set out to out & linefeed & outLine
-      end if
-    end repeat
-    if out is "" then
-      return "No subtasks"
-    end if
-    return out
-  on error
-    return "No subtasks"
+  on error errMsg number errNum
+    return "status:unsupported" & linefeed & "code:" & (errNum as string) & linefeed & "message:" & errMsg
   end try
+  if (count subtasks) is 0 then
+    return "status:empty"
+  end if
+  set out to "status:ok"
+  repeat with i from 1 to count subtasks
+    set s to item i of subtasks
+    set outLine to (i as string) & ". " & (name of s)
+    if (notes of s is not missing value) and (notes of s is not "") then
+      set outLine to outLine & " | " & (notes of s)
+    end if
+    set out to out & linefeed & outLine
+  end repeat
+  return out
 end tell`, bundleID, scriptResolveTaskByName(taskName))
 }
 
