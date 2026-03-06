@@ -18,8 +18,9 @@ import (
 const (
 	defaultBundleID    = "com.culturedcode.ThingsMac"
 	defaultDataPathRel = "Library/Group Containers/<THINGS_GROUP_CONTAINER>/<THINGS_DATA_DIR_ID>/Things Database.thingsdatabase"
-	backupDirName      = ".agent-backups"
+	backupDirName      = "backups"
 	backupTSFormat     = "2006-01-02:15-04-05"
+	maxBackupsToKeep   = 50
 	defaultListName    = "À classer"
 	cliVersion         = "0.2.1"
 )
@@ -64,6 +65,7 @@ qui modifie des données.`,
 	root.AddCommand(
 		newBackupCmd(),
 		newRestoreCmd(),
+		newSessionStartCmd(),
 		newListsCmd(),
 		newProjectsCmd(),
 		newTasksCmd(),
@@ -215,6 +217,28 @@ func newRestoreCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&target, "file", "", "Chemin du fichier backup (optionnel)")
 	return cmd
+}
+
+func newSessionStartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "session-start",
+		Short: "Initialiser la session (backup + purge des anciens backups)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			paths, err := newBackupManager(cfg.dataDir).Create(ctx)
+			if err != nil {
+				return err
+			}
+			for _, p := range paths {
+				fmt.Println(p)
+			}
+			return nil
+		},
+	}
 }
 
 func newListsCmd() *cobra.Command {
@@ -1169,6 +1193,9 @@ func (bm *backupManager) Create(ctx context.Context) ([]string, error) {
 	if len(created) == 0 {
 		return nil, errors.New("aucun fichier de base backupable trouvé")
 	}
+	if err := bm.prune(ctx, maxBackupsToKeep); err != nil {
+		return nil, fmt.Errorf("backup created but retention failed: %w", err)
+	}
 	sort.Strings(created)
 	return created, nil
 }
@@ -1229,6 +1256,29 @@ func (bm *backupManager) RestoreFile(ctx context.Context, path string) error {
 	}
 	dst := filepath.Join(bm.dataDir, baseTarget)
 	return copyFile(path, dst)
+}
+
+func (bm *backupManager) prune(ctx context.Context, keep int) error {
+	_ = ctx
+	if keep <= 0 {
+		return nil
+	}
+	timestamps, err := bm.allTimestamps()
+	if err != nil {
+		return err
+	}
+	if len(timestamps) <= keep {
+		return nil
+	}
+	for _, ts := range timestamps[keep:] {
+		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+			target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
+			if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (bm *backupManager) allTimestamps() ([]string, error) {
