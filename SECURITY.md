@@ -9,6 +9,17 @@
 
 It does **not** access the Things SQLite database directly.
 
+## Codex / Claude Code
+
+This project is designed to be used with Codex or Claude Code.
+To avoid diverging instructions files, keep `AGENTS.md` as the source and create:
+
+```bash
+ln -sf AGENTS.md CLAUDE.md
+```
+
+This ensures both agents follow the same operational and safety rules.
+
 ## Required Permissions
 
 To work correctly, the CLI depends on local macOS permissions and Things settings:

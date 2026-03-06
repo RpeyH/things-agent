@@ -4,6 +4,18 @@ Go CLI to drive Things (macOS) through AppleScript only, built with `cobra`.
 
 See [AGENTS.md](./AGENTS.md) for project operation rules (session-start backup, retention, safety, conventions).
 
+## AI Agent Usage
+
+This repository is intended to work with both Codex and Claude Code.
+
+- Codex reads `AGENTS.md` directly.
+- Claude Code uses `CLAUDE.md`.
+- Keep a single source of truth by symlinking:
+
+```bash
+ln -sf AGENTS.md CLAUDE.md
+```
+
 ## Prerequisites
 
 - macOS
