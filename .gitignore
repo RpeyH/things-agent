@@ -19,6 +19,10 @@ coverage.out
 /vendor
 /things
 /things-go
+/agent-things
+/things-agent
+/build
+/dist
 *.log
 
 # Build artifacts (par sécurité)
