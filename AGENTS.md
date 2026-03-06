@@ -7,7 +7,6 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 - Always treat this rule as top priority for this repository.
 - For each new interaction session touching this project, trigger an initial backup via:
   - `things-agent session-start`
-  - or `things-agent backup` depending on current implementation
 - The CLI keeps at most **50 backups** at all times (oldest are removed after creating a new backup).
 - Required backup timestamp format: `YYYY-MM-DD:HH-MM-SS`.
 
@@ -21,9 +20,15 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 - The agent must **only** use `things-agent` commands to change Things state.
 - No bypass allowed via ad hoc AppleScript, manual URL Scheme calls, UI automation, or any direct call outside the CLI.
 - If a feature is missing in the CLI (for example, emptying trash), the agent must propose adding it to the CLI, **not** bypassing it.
+- If the agent wants to perform any Things-related command outside the CLI, it must **always ask the user first** and wait for explicit approval before executing.
 
 ## General CLI Behavior
 
+- Rule priority order:
+  1. Session Start
+  2. Data Access Rule
+  3. Strict CLI-Only Execution Rule
+  4. Execution Convention
 - Use `things-agent` for all operations (not uncontrolled system commands against Things).
 - Check CLI health before long actions:
   - `things-agent version` if available
@@ -33,60 +38,58 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 
 ## Full CLI Command Inventory
 
-The agent should treat this list as the current command surface of the CLI:
+The agent should treat this table as the current command surface of the CLI.
 
-- `add-list`
-- `add-project`
-- `add-subtask`
-- `add-task`
-- `add-task-tags`
-- `append-task-notes`
-- `backup`
-- `complete-subtask`
-- `complete-task`
-- `delete-list`
-- `delete-project`
-- `delete-subtask`
-- `delete-task`
-- `edit-list`
-- `edit-project`
-- `edit-subtask`
-- `edit-task`
-- `help`
-- `list-subtasks`
-- `lists`
-- `projects`
-- `remove-task-tags`
-- `restore`
-- `search`
-- `session-start`
-- `set-tags`
-- `set-task-date`
-- `set-task-notes`
-- `set-task-tags`
-- `show-task`
-- `tasks`
-- `uncomplete-subtask`
-- `uncomplete-task`
-- `url`
-- `version`
-
-URL subcommands:
-
-- `url add`
-- `url add-json`
-- `url add-project`
-- `url search`
-- `url show`
-- `url update`
-- `url update-project`
-- `url version`
+| Command | What it does | State change | Notes |
+| --- | --- | --- | --- |
+| `things-agent --help` / `things-agent help` | Show command help | no | Use first when uncertain |
+| `things-agent version` | Print CLI version | no | Health check |
+| `things-agent session-start` | Create session backup + retention cleanup | yes | First command in a new session |
+| `things-agent backup` | Create backup manually | yes | Safe checkpoint |
+| `things-agent restore [--file <path or timestamp>]` | Restore a backup | yes | Critical operation |
+| `things-agent lists` | List Things areas/lists | no | Read operation |
+| `things-agent projects` | List projects | no | Read operation |
+| `things-agent tasks [--list <name>] [--query <text>]` | List tasks with optional filters | no | Read operation |
+| `things-agent search --query <text> [--list <name>]` | Search tasks | no | Read operation |
+| `things-agent show-task --name <name>` | Show full task/project details | no | Includes metadata |
+| `things-agent add-task ...` | Create a task | yes | Write operation |
+| `things-agent edit-task ...` | Edit a task by name | yes | Write operation |
+| `things-agent delete-task --name <name>` | Delete a task | yes | Destructive |
+| `things-agent complete-task --name <name>` | Mark task completed | yes | Write operation |
+| `things-agent uncomplete-task --name <name>` | Mark task open again | yes | Write operation |
+| `things-agent set-tags --name <name> --tags <csv>` | Set tags on task/project | yes | Legacy generic setter |
+| `things-agent set-task-tags --name <name> --tags <csv>` | Replace task tags | yes | Exact set |
+| `things-agent add-task-tags --name <name> --tags <csv>` | Add task tags | yes | Merge behavior |
+| `things-agent remove-task-tags --name <name> --tags <csv>` | Remove task tags | yes | Partial remove |
+| `things-agent set-task-notes --name <name> --notes <text>` | Replace task notes | yes | Write operation |
+| `things-agent append-task-notes --name <name> --notes <text>` | Append task notes | yes | Write operation |
+| `things-agent set-task-date --name <name> ...` | Set/clear due/deadline | yes | Write operation |
+| `things-agent add-project --name <name> [--list <area>]` | Create project | yes | Write operation |
+| `things-agent edit-project --name <name> ...` | Edit project | yes | Write operation |
+| `things-agent delete-project --name <name>` | Delete project | yes | Destructive |
+| `things-agent add-list --name <name>` | Create area/list | yes | Write operation |
+| `things-agent edit-list --name <name> --new-name <name>` | Rename area/list | yes | Write operation |
+| `things-agent delete-list --name <name>` | Delete area/list | yes | Destructive |
+| `things-agent list-subtasks --task <name>` | List checklist/subtasks | no | Read operation |
+| `things-agent add-subtask --task <name> --name <name>` | Add checklist item | yes | Requires token |
+| `things-agent edit-subtask --task <name> ...` | Edit checklist item | yes | Write operation |
+| `things-agent delete-subtask --task <name> ...` | Delete checklist item | yes | Destructive |
+| `things-agent complete-subtask --task <name> ...` | Mark checklist item completed | yes | Write operation |
+| `things-agent uncomplete-subtask --task <name> ...` | Mark checklist item open | yes | Write operation |
+| `things-agent url add ...` | Things URL Scheme `add` | yes | Direct URL bridge |
+| `things-agent url update ...` | Things URL Scheme `update` | yes | Requires token |
+| `things-agent url add-project ...` | Things URL Scheme `add-project` | yes | Direct URL bridge |
+| `things-agent url update-project ...` | Things URL Scheme `update-project` | yes | Requires token for updates |
+| `things-agent url show ...` | Things URL Scheme `show` | no | Reveal/query |
+| `things-agent url search --query <text>` | Things URL Scheme `search` | no | Search via URL scheme |
+| `things-agent url version` | Things URL Scheme `version` | no | URL scheme info |
+| `things-agent url add-json --data '<json>'` | Things URL Scheme `add-json` | yes | `operation:update` requires token |
 
 ## Expected Operations to Implement / Document
 
 - Search and read:
-  - Search a task: `things-agent task search <query>`
-  - Global search: `things-agent search <query>`
+  - Search tasks: `things-agent search --query <query>`
+  - Global search: `things-agent search --query <query>`
   - View today/in-progress tasks if supported.
 - Projects:
   - List projects
