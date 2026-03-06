@@ -1,8 +1,8 @@
-# agent-things
+# things-agent
 
 Go CLI to drive Things (macOS) through AppleScript only, built with `cobra`.
 
-See [AGENTS.md](/workspace/things-agent/AGENTS.md) for project operation rules (session-start backup, retention, safety, conventions).
+See [AGENTS.md](./AGENTS.md) for project operation rules (session-start backup, retention, safety, conventions).
 
 ## Prerequisites
 
@@ -17,9 +17,9 @@ Default target list is `Inbox`. You can override it with `THINGS_DEFAULT_LIST` (
 ## Installation
 
 ```bash
-cd /workspace/things-agent
+cd things-agent
 go mod tidy
-go build -o /usr/local/bin/agent-things .
+go build -o /usr/local/bin/things-agent .
 ```
 
 You can also choose a different binary name at build time.
@@ -27,18 +27,18 @@ You can also choose a different binary name at build time.
 ## Usage
 
 ```bash
-agent-things session-start
-agent-things backup
-agent-things tasks --list "À classer"
-agent-things search --query "Wagner"
-agent-things add-task --name "Say hello" --notes "Message" --list "À classer"
-THINGS_DEFAULT_LIST="À classer" agent-things add-task --name "Uses env default list"
-agent-things add-task --name "Native checklist" --subtasks "Point 1, Point 2" --auth-token "<token>"
-agent-things complete-task --name "Say hello"
-agent-things list-subtasks --task "Say hello"
-agent-things add-subtask --task "Say hello" --name "Review the message"
-agent-things url add --title "URL task" --tags "test"
-agent-things url update --id "<todo-id>" --append-checklist-items "one, two" --auth-token "<token>"
+things-agent session-start
+things-agent backup
+things-agent tasks --list "À classer"
+things-agent search --query "Wagner"
+things-agent add-task --name "Say hello" --notes "Message" --list "À classer"
+THINGS_DEFAULT_LIST="À classer" things-agent add-task --name "Uses env default list"
+things-agent add-task --name "Native checklist" --subtasks "Point 1, Point 2" --auth-token "<token>"
+things-agent complete-task --name "Say hello"
+things-agent list-subtasks --task "Say hello"
+things-agent add-subtask --task "Say hello" --name "Review the message"
+things-agent url add --title "URL task" --tags "test"
+things-agent url update --id "<todo-id>" --append-checklist-items "one, two" --auth-token "<token>"
 ```
 
 ### Useful Commands
@@ -67,11 +67,11 @@ agent-things url update --id "<todo-id>" --append-checklist-items "one, two" --a
 
 ### URL Scheme API Mapping
 
-- `agent-things url add`: options from `things:///add` (`title`, `notes`, `when`, `deadline`, `tags`, `checklist-items`, `list`, `list-id`, `heading`, `heading-id`, `completed`, `canceled`, `reveal`, `notes-template`)
-- `agent-things url update`: options from `things:///update` (`id`, `title`, `notes`, `prepend-notes`, `append-notes`, `when`, `deadline`, `tags`, `add-tags`, `checklist-items`, `prepend-checklist-items`, `append-checklist-items`, `list`, `list-id`, `heading`, `heading-id`, `completed`, `canceled`, `reveal`, `duplicate`, `creation-date`, `completion-date`)
-- `agent-things url add-project`: options from `things:///add-project` (`title`, `notes`, `when`, `deadline`, `tags`, `area`, `area-id`, `to-dos`, `completed`, `canceled`, `reveal`, `creation-date`, `completion-date`)
-- `agent-things url update-project`: options from `things:///update-project` (`id`, `title`, `notes`, `prepend-notes`, `append-notes`, `when`, `deadline`, `tags`, `add-tags`, `area`, `area-id`, `completed`, `canceled`, `reveal`, `duplicate`, `creation-date`, `completion-date`)
-- `agent-things url show`: options from `things:///show` (`id`, `query`, `filter`)
-- `agent-things url search`: option `query`
-- `agent-things url version`
-- `agent-things url add-json`: `data` (+ `auth-token` required when using `operation:update`)
+- `things-agent url add`: options from `things:///add` (`title`, `notes`, `when`, `deadline`, `tags`, `checklist-items`, `list`, `list-id`, `heading`, `heading-id`, `completed`, `canceled`, `reveal`, `notes-template`)
+- `things-agent url update`: options from `things:///update` (`id`, `title`, `notes`, `prepend-notes`, `append-notes`, `when`, `deadline`, `tags`, `add-tags`, `checklist-items`, `prepend-checklist-items`, `append-checklist-items`, `list`, `list-id`, `heading`, `heading-id`, `completed`, `canceled`, `reveal`, `duplicate`, `creation-date`, `completion-date`)
+- `things-agent url add-project`: options from `things:///add-project` (`title`, `notes`, `when`, `deadline`, `tags`, `area`, `area-id`, `to-dos`, `completed`, `canceled`, `reveal`, `creation-date`, `completion-date`)
+- `things-agent url update-project`: options from `things:///update-project` (`id`, `title`, `notes`, `prepend-notes`, `append-notes`, `when`, `deadline`, `tags`, `add-tags`, `area`, `area-id`, `completed`, `canceled`, `reveal`, `duplicate`, `creation-date`, `completion-date`)
+- `things-agent url show`: options from `things:///show` (`id`, `query`, `filter`)
+- `things-agent url search`: option `query`
+- `things-agent url version`
+- `things-agent url add-json`: `data` (+ `auth-token` required when using `operation:update`)

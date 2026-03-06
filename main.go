@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	defaultBundleID    = "com.culturedcode.ThingsMac"
-	defaultDataPathRel = "Library/Group Containers/<THINGS_GROUP_CONTAINER>/<THINGS_DATA_DIR_ID>/Things Database.thingsdatabase"
-	backupDirName      = "backups"
-	backupTSFormat     = "2006-01-02:15-04-05"
-	maxBackupsToKeep   = 50
-	defaultListName    = "Inbox"
-	cliVersion         = "0.3.0"
+	defaultBundleID   = "com.culturedcode.ThingsMac"
+	backupDirName     = "backups"
+	backupTSFormat    = "2006-01-02:15-04-05"
+	maxBackupsToKeep  = 50
+	defaultListName   = "Inbox"
+	cliVersion        = "0.3.0"
+	thingsDataPattern = "Library/Group Containers/*.com.culturedcode.ThingsMac/ThingsData-*/Things Database.thingsdatabase"
 )
 
 var config = struct {
@@ -50,7 +50,7 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "agent-things",
+		Use:           "things-agent",
 		SilenceErrors: false,
 		SilenceUsage:  true,
 		Short:         "Things CLI via AppleScript (no direct DB access)",
@@ -2308,7 +2308,18 @@ func resolveDataDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, defaultDataPathRel), nil
+	pattern := filepath.Join(home, thingsDataPattern)
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve Things data dir: %w", err)
+	}
+	sort.Strings(matches)
+	for _, candidate := range matches {
+		if st, err := os.Stat(filepath.Join(candidate, "main.sqlite")); err == nil && !st.IsDir() {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("could not resolve Things data dir automatically; set THINGS_DATA_DIR")
 }
 
 func envOrDefault(key, defaultValue string) string {
