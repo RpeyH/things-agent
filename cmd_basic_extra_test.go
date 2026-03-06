@@ -96,20 +96,26 @@ func TestBackupRestoreSessionCommands(t *testing.T) {
 	restoreByFile := newRestoreCmd()
 	restoreByFile.SetArgs([]string{"--file", filepath.Join(tmp, backupDirName, entries[0].Name())})
 	err = restoreByFile.Execute()
-	if err != nil && !strings.Contains(err.Error(), "invalid") {
-		t.Fatalf("restore by file unexpected error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "--unsafe-legacy-restore") {
+		t.Fatalf("expected unsafe legacy restore guard, got: %v", err)
 	}
 
 	restoreMissing := newRestoreCmd()
-	restoreMissing.SetArgs([]string{"--file", "missing-ts"})
+	restoreMissing.SetArgs([]string{"--timestamp", "missing-ts"})
 	if err := restoreMissing.Execute(); err == nil {
 		t.Fatal("expected restore error for missing timestamp/file")
 	}
 
-	restoreByTimestampInName := newRestoreCmd()
-	restoreByTimestampInName.SetArgs([]string{"--file", entries[0].Name()})
-	if err := restoreByTimestampInName.Execute(); err != nil {
-		t.Fatalf("restore by backup filename failed: %v", err)
+	restoreByTimestamp := newRestoreCmd()
+	restoreByTimestamp.SetArgs([]string{"--timestamp", inferTimestamp(entries[0].Name())})
+	if err := restoreByTimestamp.Execute(); err != nil {
+		t.Fatalf("restore by timestamp failed: %v", err)
+	}
+
+	restoreByUnsafeFile := newRestoreCmd()
+	restoreByUnsafeFile.SetArgs([]string{"--file", filepath.Join(tmp, backupDirName, entries[0].Name()), "--unsafe-legacy-restore"})
+	if err := restoreByUnsafeFile.Execute(); err != nil && !strings.Contains(err.Error(), "invalid") {
+		t.Fatalf("restore by unsafe file unexpected error: %v", err)
 	}
 }
 

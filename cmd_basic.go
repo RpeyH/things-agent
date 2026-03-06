@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -98,7 +97,8 @@ func newBackupCmd() *cobra.Command {
 }
 
 func newRestoreCmd() *cobra.Command {
-	var target string
+	var targetFile, timestamp string
+	var unsafeLegacyRestore bool
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Restore a backup (latest by default)",
@@ -109,34 +109,32 @@ func newRestoreCmd() *cobra.Command {
 				return err
 			}
 			bm := newBackupManager(cfg.dataDir)
-			if strings.TrimSpace(target) == "" {
+
+			targetFile = strings.TrimSpace(targetFile)
+			timestamp = strings.TrimSpace(timestamp)
+			if targetFile != "" && timestamp != "" {
+				return errors.New("use either --timestamp or --file, not both")
+			}
+			if targetFile != "" {
+				if !unsafeLegacyRestore {
+					return errors.New("--file requires --unsafe-legacy-restore")
+				}
+				if err := bm.RestoreFile(ctx, targetFile); err != nil {
+					return err
+				}
+				fmt.Println(targetFile)
+				return nil
+			}
+
+			if timestamp == "" {
 				ts, err := bm.Latest(ctx)
 				if err != nil {
 					return err
 				}
-				restored, err := bm.Restore(ctx, ts)
-				if err != nil {
-					return err
-				}
-				for _, p := range restored {
-					fmt.Println(p)
-				}
-				return nil
+				timestamp = ts
 			}
 
-			if info, err := os.Stat(target); err == nil && !info.IsDir() {
-				if err := bm.RestoreFile(ctx, target); err != nil {
-					return err
-				}
-				fmt.Println(target)
-				return nil
-			}
-
-			ts := inferTimestamp(target)
-			if ts == "" {
-				ts = target
-			}
-			restored, err := bm.Restore(ctx, ts)
+			restored, err := bm.Restore(ctx, timestamp)
 			if err != nil {
 				return err
 			}
@@ -146,7 +144,9 @@ func newRestoreCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&target, "file", "", "Chemin du fichier backup (optionnel)")
+	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp set to restore")
+	cmd.Flags().StringVar(&targetFile, "file", "", "Legacy direct backup file path (unsafe)")
+	cmd.Flags().BoolVar(&unsafeLegacyRestore, "unsafe-legacy-restore", false, "Allow legacy direct-file restore")
 	return cmd
 }
 

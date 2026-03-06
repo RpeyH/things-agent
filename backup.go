@@ -73,6 +73,11 @@ func (bm *backupManager) FilesForTimestamp(ctx context.Context, ts string) ([]st
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no file for timestamp %s", ts)
 	}
+	if len(paths) != 3 {
+		sort.Strings(paths)
+		return nil, fmt.Errorf("incomplete snapshot for timestamp %s", ts)
+	}
+	sort.Strings(paths)
 	return paths, nil
 }
 

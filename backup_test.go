@@ -140,6 +140,28 @@ func TestBackupManagerErrorsAndRestoreFileBranches(t *testing.T) {
 	}
 }
 
+func TestBackupManagerFilesForTimestampRequiresCompleteTrio(t *testing.T) {
+	tmp := t.TempDir()
+	bm := newBackupManager(tmp)
+	backupPath, err := bm.ensureBackupDir()
+	if err != nil {
+		t.Fatalf("ensureBackupDir failed: %v", err)
+	}
+
+	ts := "2026-03-06:12-00-00"
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm"} {
+		p := filepath.Join(backupPath, base+"."+ts+".bak")
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed backup %s failed: %v", p, err)
+		}
+	}
+
+	_, err = bm.FilesForTimestamp(context.Background(), ts)
+	if err == nil || !strings.Contains(err.Error(), "incomplete snapshot") {
+		t.Fatalf("expected incomplete snapshot error, got %v", err)
+	}
+}
+
 func TestBackupManagerPruneKeepZeroNoop(t *testing.T) {
 	tmp := t.TempDir()
 	bm := newBackupManager(tmp)
