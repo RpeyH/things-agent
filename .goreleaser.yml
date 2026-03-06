@@ -29,4 +29,31 @@ checksum:
   name_template: checksums.txt
 
 changelog:
-  use: github-native
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - "^style:"
+  groups:
+    - title: Features
+      regexp: "^feat(\\(.+\\))?:"
+      order: 0
+    - title: Fixes
+      regexp: "^fix(\\(.+\\))?:"
+      order: 1
+    - title: CI and Build
+      regexp: "^(ci|build)(\\(.+\\))?:"
+      order: 2
+    - title: Refactors
+      regexp: "^refactor(\\(.+\\))?:"
+      order: 3
+    - title: Others
+      order: 999
+
+release:
+  footer: |
+    ---
+    **Full Changelog**: https://github.com/alnah/things-agent/compare/{{ .PreviousTag }}...{{ .Tag }}
