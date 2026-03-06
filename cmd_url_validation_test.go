@@ -35,6 +35,21 @@ func TestURLSearchRequiresQuery(t *testing.T) {
 	}
 }
 
+func TestURLSearchRejectsBlankQuery(t *testing.T) {
+	fr := &fakeRunner{}
+	setupTestRuntime(t, t.TempDir(), fr)
+
+	cmd := newURLSearchCmd()
+	cmd.SetArgs([]string{"--query", "   "})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for blank --query")
+	}
+	if !strings.Contains(err.Error(), "--query is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestURLAddJSONRequiresData(t *testing.T) {
 
 	fr := &fakeRunner{}

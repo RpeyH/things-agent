@@ -1,0 +1,98 @@
+package main
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestProjectListCommands(t *testing.T) {
+	t.Run("add and edit and delete succeed", func(t *testing.T) {
+		fr := &fakeRunner{output: "ok"}
+		setupTestRuntimeWithDB(t, fr)
+
+		addProject := newAddProjectCmd()
+		addProject.SetArgs([]string{"--name", "p1", "--notes", "n", "--list", "Inbox"})
+		if err := addProject.Execute(); err != nil {
+			t.Fatalf("add-project failed: %v", err)
+		}
+
+		addList := newAddListCmd()
+		addList.SetArgs([]string{"--name", "area1"})
+		if err := addList.Execute(); err != nil {
+			t.Fatalf("add-list failed: %v", err)
+		}
+
+		editProject := newEditProjectCmd()
+		editProject.SetArgs([]string{"--name", "p1", "--new-name", "p2"})
+		if err := editProject.Execute(); err != nil {
+			t.Fatalf("edit-project failed: %v", err)
+		}
+
+		editList := newEditListCmd()
+		editList.SetArgs([]string{"--name", "area1", "--new-name", "area2"})
+		if err := editList.Execute(); err != nil {
+			t.Fatalf("edit-list failed: %v", err)
+		}
+
+		deleteProject := newDeleteProjectCmd()
+		deleteProject.SetArgs([]string{"--name", "p2"})
+		if err := deleteProject.Execute(); err != nil {
+			t.Fatalf("delete-project failed: %v", err)
+		}
+
+		deleteList := newDeleteListCmd()
+		deleteList.SetArgs([]string{"--name", "area2"})
+		if err := deleteList.Execute(); err != nil {
+			t.Fatalf("delete-list failed: %v", err)
+		}
+
+		scripts := fr.allScripts()
+		if len(scripts) < 6 {
+			t.Fatalf("expected script calls for all operations, got %d", len(scripts))
+		}
+	})
+
+	t.Run("validation errors", func(t *testing.T) {
+		fr := &fakeRunner{}
+		setupTestRuntime(t, t.TempDir(), fr)
+
+		editProject := newEditProjectCmd()
+		editProject.SetArgs([]string{"--name", "p1"})
+		err := editProject.Execute()
+		if err == nil || !strings.Contains(err.Error(), "specify --new-name and/or --notes") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		editList := newEditListCmd()
+		editList.SetArgs([]string{"--name", "area"})
+		err = editList.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--new-name is required") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		addProject := newAddProjectCmd()
+		addProject.SetArgs([]string{"--name", "   "})
+		err = addProject.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--name is required") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		addList := newAddListCmd()
+		addList.SetArgs([]string{"--name", "   "})
+		err = addList.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--name is required") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("delete unknown kind errors", func(t *testing.T) {
+		fr := &fakeRunner{output: "ok"}
+		setupTestRuntimeWithDB(t, fr)
+		cmd := newDeleteCmd("unknown-kind", "delete-unknown")
+		cmd.SetArgs([]string{"--name", "x"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "unknown kind") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}

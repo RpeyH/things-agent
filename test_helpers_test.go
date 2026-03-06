@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -45,4 +47,17 @@ func setupTestRuntime(t *testing.T, dataDir string, fr *fakeRunner) {
 		config = origConfig
 		newRuntimeRunner = origFactory
 	})
+}
+
+func setupTestRuntimeWithDB(t *testing.T, fr *fakeRunner) string {
+	t.Helper()
+
+	tmp := t.TempDir()
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		if err := os.WriteFile(filepath.Join(tmp, base), []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed %s failed: %v", base, err)
+		}
+	}
+	setupTestRuntime(t, tmp, fr)
+	return tmp
 }

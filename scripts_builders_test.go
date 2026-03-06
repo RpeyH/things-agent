@@ -53,3 +53,64 @@ func TestScriptEditTaskRequiresSource(t *testing.T) {
 		t.Fatal("expected error when source is empty")
 	}
 }
+
+func TestRequireAuthToken(t *testing.T) {
+	_, err := requireAuthToken(&runtimeConfig{authToken: "   "})
+	if err == nil {
+		t.Fatal("expected missing auth token error")
+	}
+	token, err := requireAuthToken(&runtimeConfig{authToken: " tok "})
+	if err != nil || token != "tok" {
+		t.Fatalf("unexpected token result: token=%q err=%v", token, err)
+	}
+}
+
+func TestScriptAppendTaskNotesDefaultSeparator(t *testing.T) {
+	s := scriptAppendTaskNotes(defaultBundleID, "task", "note", "")
+	if !strings.Contains(s, `& "\n" & "note"`) {
+		t.Fatalf("expected default newline separator in script: %s", s)
+	}
+}
+
+func TestScriptSetTaskDateClearAndDeadline(t *testing.T) {
+	s := scriptSetTaskDate(defaultBundleID, "task", "", "2026-03-06 00:00:00", true)
+	if !strings.Contains(s, "set due date of t to missing value") {
+		t.Fatalf("expected clear due date step: %s", s)
+	}
+	if !strings.Contains(s, `set due date of t to date "2026-03-06 00:00:00"`) {
+		t.Fatalf("expected deadline date set: %s", s)
+	}
+}
+
+func TestScriptEditTaskWithAllOptionalFields(t *testing.T) {
+	s, err := scriptEditTask(
+		defaultBundleID,
+		"source",
+		"new-name",
+		"new-notes",
+		"a,b",
+		"Inbox",
+		"2026-03-06 00:00:00",
+		"2026-03-07 00:00:00",
+		"2026-03-01 00:00:00",
+		"2026-03-08 00:00:00",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantParts := []string{
+		`set name of t to "new-name"`,
+		`set notes of t to "new-notes"`,
+		`set tag names of t to "a,b"`,
+		`move t to end of to dos of (first list whose name is "Inbox")`,
+		`set due date of t to date "2026-03-06 00:00:00"`,
+		`set completion date of t to date "2026-03-07 00:00:00"`,
+		`set creation date of t to date "2026-03-01 00:00:00"`,
+		`set cancellation date of t to date "2026-03-08 00:00:00"`,
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(s, part) {
+			t.Fatalf("missing script segment %q in %s", part, s)
+		}
+	}
+}

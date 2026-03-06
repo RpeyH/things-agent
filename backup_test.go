@@ -121,3 +121,46 @@ func TestBackupManagerPruneKeepsNewestTimestamps(t *testing.T) {
 		t.Fatalf("newest timestamp should remain, stat err=%v", err)
 	}
 }
+
+func TestBackupManagerErrorsAndRestoreFileBranches(t *testing.T) {
+	tmp := t.TempDir()
+	bm := newBackupManager(tmp)
+
+	if _, err := bm.Create(context.Background()); err == nil || !strings.Contains(err.Error(), "no backupable database file found") {
+		t.Fatalf("expected create no-file error, got: %v", err)
+	}
+	if _, err := bm.Latest(context.Background()); err == nil || !strings.Contains(err.Error(), "no backup available") {
+		t.Fatalf("expected latest no-backup error, got: %v", err)
+	}
+	if _, err := bm.FilesForTimestamp(context.Background(), "2026-01-01:00-00-00"); err == nil {
+		t.Fatal("expected files-for-timestamp error")
+	}
+	if err := bm.RestoreFile(context.Background(), filepath.Join(tmp, "invalid.bak")); err == nil {
+		t.Fatal("expected invalid backup name error")
+	}
+}
+
+func TestBackupManagerPruneKeepZeroNoop(t *testing.T) {
+	tmp := t.TempDir()
+	bm := newBackupManager(tmp)
+	if err := bm.prune(context.Background(), 0); err != nil {
+		t.Fatalf("prune keep=0 should be noop: %v", err)
+	}
+}
+
+func TestCopyFileAndEnsureBackupDirErrorBranches(t *testing.T) {
+	tmp := t.TempDir()
+
+	if err := copyFile(filepath.Join(tmp, "missing"), filepath.Join(tmp, "out")); err == nil {
+		t.Fatal("expected copyFile error when source is missing")
+	}
+
+	fileAsDir := filepath.Join(tmp, "not-a-dir")
+	if err := os.WriteFile(fileAsDir, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+	bm := newBackupManager(fileAsDir)
+	if _, err := bm.ensureBackupDir(); err == nil {
+		t.Fatal("expected ensureBackupDir error when dataDir is a file")
+	}
+}
