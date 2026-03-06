@@ -3,6 +3,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -27,8 +29,14 @@ func TestCLIIntegrationTagsSearchUsesMockRunner(t *testing.T) {
 }
 
 func TestCLIIntegrationAddTaskUsesMockRunner(t *testing.T) {
+	tmp := t.TempDir()
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		if err := os.WriteFile(filepath.Join(tmp, base), []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed %s failed: %v", base, err)
+		}
+	}
 	fr := &fakeRunner{output: "task-id-1"}
-	setupTestRuntime(t, t.TempDir(), fr)
+	setupTestRuntime(t, tmp, fr)
 
 	root := newRootCmd()
 	root.SetArgs([]string{"add-task", "--name", "integration-task", "--list", "Inbox"})

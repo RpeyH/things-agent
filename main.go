@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -53,9 +54,22 @@ before each write action.`,
 		},
 	}
 
-	root.PersistentFlags().StringVar(&config.bundleID, "bundle-id", envOrDefault("THINGS_BUNDLE_ID", defaultBundleID), "Things app bundle id")
-	root.PersistentFlags().StringVar(&config.dataDir, "data-dir", envOrDefault("THINGS_DATA_DIR", ""), "Things database path")
-	root.PersistentFlags().StringVar(&config.authToken, "auth-token", envOrDefault("THINGS_AUTH_TOKEN", ""), "Things URL Scheme auth token (Settings > General)")
+	bundleIDDefault := strings.TrimSpace(config.bundleID)
+	if bundleIDDefault == "" {
+		bundleIDDefault = envOrDefault("THINGS_BUNDLE_ID", defaultBundleID)
+	}
+	dataDirDefault := strings.TrimSpace(config.dataDir)
+	if dataDirDefault == "" {
+		dataDirDefault = envOrDefault("THINGS_DATA_DIR", "")
+	}
+	authTokenDefault := strings.TrimSpace(config.authToken)
+	if authTokenDefault == "" {
+		authTokenDefault = envOrDefault("THINGS_AUTH_TOKEN", "")
+	}
+
+	root.PersistentFlags().StringVar(&config.bundleID, "bundle-id", bundleIDDefault, "Things app bundle id")
+	root.PersistentFlags().StringVar(&config.dataDir, "data-dir", dataDirDefault, "Things database path")
+	root.PersistentFlags().StringVar(&config.authToken, "auth-token", authTokenDefault, "Things URL Scheme auth token (Settings > General)")
 
 	root.AddCommand(
 		newBackupCmd(),
