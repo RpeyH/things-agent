@@ -54,7 +54,7 @@ func TestURLAddJSONRequiresData(t *testing.T) {
 	fr := &fakeRunner{}
 	setupTestRuntime(t, t.TempDir(), fr)
 
-	cmd := newURLAddJSONCmd()
+	cmd := newURLJSONCmd()
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected error for missing --data")

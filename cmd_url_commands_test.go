@@ -108,10 +108,10 @@ func TestURLCommandsExecute(t *testing.T) {
 			t.Fatalf("url json failed: %v", err)
 		}
 
-		addJSONUpdate := newURLAddJSONCmd()
-		addJSONUpdate.SetArgs([]string{"--data", `{"operation":"update","items":[]}`})
-		if err := addJSONUpdate.Execute(); err != nil {
-			t.Fatalf("url add-json update failed: %v", err)
+		jsonUpdate := newURLJSONCmd()
+		jsonUpdate.SetArgs([]string{"--data", `{"operation":"update","items":[]}`})
+		if err := jsonUpdate.Execute(); err != nil {
+			t.Fatalf("url json update failed: %v", err)
 		}
 
 		scripts := strings.Join(fr.allScripts(), "\n")
@@ -123,12 +123,12 @@ func TestURLCommandsExecute(t *testing.T) {
 		}
 	})
 
-	t.Run("url add-json update requires token", func(t *testing.T) {
+	t.Run("url json update requires token", func(t *testing.T) {
 		fr := &fakeRunner{output: "ok"}
 		setupTestRuntimeWithDB(t, fr)
 		t.Setenv("THINGS_AUTH_TOKEN", "")
 		config.authToken = ""
-		cmd := newURLAddJSONCmd()
+		cmd := newURLJSONCmd()
 		cmd.SetArgs([]string{"--data", `{"operation":"update","items":[]}`})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "auth-token is required") {

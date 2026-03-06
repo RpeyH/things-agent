@@ -97,8 +97,7 @@ func newBackupCmd() *cobra.Command {
 }
 
 func newRestoreCmd() *cobra.Command {
-	var targetFile, timestamp string
-	var unsafeLegacyRestore bool
+	var timestamp string
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Restore a backup (latest by default)",
@@ -109,23 +108,7 @@ func newRestoreCmd() *cobra.Command {
 				return err
 			}
 			bm := newBackupManager(cfg.dataDir)
-
-			targetFile = strings.TrimSpace(targetFile)
 			timestamp = strings.TrimSpace(timestamp)
-			if targetFile != "" && timestamp != "" {
-				return errors.New("use either --timestamp or --file, not both")
-			}
-			if targetFile != "" {
-				if !unsafeLegacyRestore {
-					return errors.New("--file requires --unsafe-legacy-restore")
-				}
-				if err := bm.RestoreFile(ctx, targetFile); err != nil {
-					return err
-				}
-				fmt.Println(targetFile)
-				return nil
-			}
-
 			if timestamp == "" {
 				ts, err := bm.Latest(ctx)
 				if err != nil {
@@ -145,8 +128,6 @@ func newRestoreCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp set to restore")
-	cmd.Flags().StringVar(&targetFile, "file", "", "Legacy direct backup file path (unsafe)")
-	cmd.Flags().BoolVar(&unsafeLegacyRestore, "unsafe-legacy-restore", false, "Allow legacy direct-file restore")
 	return cmd
 }
 

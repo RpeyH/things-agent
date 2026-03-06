@@ -158,9 +158,3 @@ func newURLJSONCommand(use, short, commandName string) *cobra.Command {
 func newURLJSONCmd() *cobra.Command {
 	return newURLJSONCommand("json", "things:///json", "json")
 }
-
-func newURLAddJSONCmd() *cobra.Command {
-	cmd := newURLJSONCommand("add-json", "things:///add-json", "json")
-	cmd.Deprecated = "use `things-agent url json` instead"
-	return cmd
-}
