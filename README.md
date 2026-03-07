@@ -139,10 +139,10 @@ things-agent show-task --id "<todo-id>" --json
 things-agent add-task --name "Say hello" --notes "Message" --area "À classer"
 things-agent add-task --name "File chapter draft" --project "French Course"
 THINGS_DEFAULT_LIST="À classer" things-agent add-task --name "Uses env default list"
-things-agent add-task --name "Native checklist" --subtasks "Point 1, Point 2" --auth-token "<token>"
+things-agent add-task --name "Native checklist" --checklist-items "Point 1, Point 2" --auth-token "<token>"
 things-agent complete-task --id "<todo-id>"
-things-agent list-subtasks --task-id "<todo-id>"
-things-agent add-subtask --task-id "<todo-id>" --name "Review the message"
+things-agent list-checklist-items --task-id "<todo-id>"
+things-agent add-checklist-item --task-id "<todo-id>" --name "Review the message"
 things-agent tags list
 things-agent tags search --query "work"
 things-agent tags add --name "urgent"
@@ -170,12 +170,12 @@ Then re-check macOS privacy settings for your terminal/agent app:
 
 ### Auth token (`THINGS_AUTH_TOKEN`)
 
-Native checklist updates require a valid token (`add-subtask`, `url update`, `add-task --subtasks`).
+Native checklist updates require a valid token (`add-checklist-item`, `url update`, `add-task --checklist-items`).
 If you see missing or invalid token errors:
 
 ```bash
 export THINGS_AUTH_TOKEN="<your-things-token>"
-things-agent add-task --name "Token check" --subtasks "one, two"
+things-agent add-task --name "Token check" --checklist-items "one, two"
 ```
 
 You can also pass `--auth-token` explicitly per command.
@@ -218,10 +218,10 @@ This keeps audit workflows safe while respecting the no-direct-database rule.
 | Tags | `set-tags (--name|--id)`, `set-task-tags (--name|--id)`, `add-task-tags (--name|--id)`, `remove-task-tags (--name|--id)` | Exact set and incremental updates |
 | Projects | `add-project [--area <name>]`, `edit-project (--name|--id)`, `delete-project (--name|--id)` | Project CRUD |
 | Areas/lists | `add-list`, `edit-list`, `delete-list` | Area/list CRUD |
-| Subtasks/checklist | `add-subtask (--task|--task-id)`, `edit-subtask (--task|--task-id)`, `delete-subtask (--task|--task-id)`, `complete-subtask (--task|--task-id)`, `uncomplete-subtask (--task|--task-id)`, `list-subtasks (--task|--task-id)` | `add-subtask` uses native checklist and requires token |
+| Checklist items | `add-checklist-item (--task|--task-id)`, `edit-checklist-item (--task|--task-id)`, `delete-checklist-item (--task|--task-id)`, `complete-checklist-item (--task|--task-id)`, `uncomplete-checklist-item (--task|--task-id)`, `list-checklist-items (--task|--task-id)` | `add-checklist-item` uses native checklist and requires token |
 | URL Scheme bridge | `url add|update|add-project|update-project|show|search|version|json` | Direct mapping of Things URL Scheme |
 | CLI info | `version` | Print CLI version |
-| Checklist shortcut | `add-task --subtasks "a, b"` | Creates native checklist, requires `--auth-token` or `THINGS_AUTH_TOKEN` |
+| Checklist shortcut | `add-task --checklist-items "a, b"` | Creates native checklist, requires `--auth-token` or `THINGS_AUTH_TOKEN` |
 
 ### URL Scheme API Mapping
 

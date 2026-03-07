@@ -79,12 +79,12 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent add-list --name <name>` | Create area/list | yes | Write operation |
 | `things-agent edit-list --name <name> --new-name <name>` | Rename area/list | yes | Write operation |
 | `things-agent delete-list --name <name>` | Delete area/list | yes | Destructive |
-| `things-agent list-subtasks (--task <name> | --task-id <id>)` | List checklist/subtasks | no | Read operation |
-| `things-agent add-subtask (--task <name> | --task-id <id>) --name <name>` | Add checklist item | yes | Requires token |
-| `things-agent edit-subtask (--task <name> | --task-id <id>) ...` | Edit checklist item | yes | Write operation |
-| `things-agent delete-subtask (--task <name> | --task-id <id>) ...` | Delete checklist item | yes | Destructive |
-| `things-agent complete-subtask (--task <name> | --task-id <id>) ...` | Mark checklist item completed | yes | Write operation |
-| `things-agent uncomplete-subtask (--task <name> | --task-id <id>) ...` | Mark checklist item open | yes | Write operation |
+| `things-agent list-checklist-items (--task <name> | --task-id <id>)` | List checklist items | no | Read operation |
+| `things-agent add-checklist-item (--task <name> | --task-id <id>) --name <name>` | Add checklist item | yes | Requires token |
+| `things-agent edit-checklist-item (--task <name> | --task-id <id>) ...` | Edit checklist item | yes | Write operation |
+| `things-agent delete-checklist-item (--task <name> | --task-id <id>) ...` | Delete checklist item | yes | Destructive |
+| `things-agent complete-checklist-item (--task <name> | --task-id <id>) ...` | Mark checklist item completed | yes | Write operation |
+| `things-agent uncomplete-checklist-item (--task <name> | --task-id <id>) ...` | Mark checklist item open | yes | Write operation |
 | `things-agent url add ...` | Things URL Scheme `add` | yes | Direct URL bridge |
 | `things-agent url update ...` | Things URL Scheme `update` | yes | Requires token |
 | `things-agent url add-project ...` | Things URL Scheme `add-project` | yes | Direct URL bridge |
@@ -115,9 +115,9 @@ The agent should treat this table as the current command surface of the CLI.
   - Edit a task
   - Delete a task
   - Mark task completed
-  - View a task (id, name, status, due/deadline, tags, notes, subtasks/checklist)
+  - View a task (id, name, status, due/deadline, tags, notes, checklist items)
   - Manage notes
-  - Manage subtasks/checklist items
+  - Manage checklist items
 - Dates:
   - Set/update `deadline` and due fields
   - Support coherent date formats (ISO/localized based on input)

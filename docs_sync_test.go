@@ -19,7 +19,7 @@ func TestDocsSyncGate(t *testing.T) {
 		"add-task --area",
 		"add-task --project",
 		"edit-task (--name <name> | --id <id>)",
-		"list-subtasks (--task <name> | --task-id <id>)",
+		"list-checklist-items (--task <name> | --task-id <id>)",
 	}
 	for _, needle := range required {
 		if !strings.Contains(agents, needle) && !strings.Contains(readme, needle) {
@@ -29,7 +29,7 @@ func TestDocsSyncGate(t *testing.T) {
 
 	agentsRequired := []string{
 		"show-task (--name <name> | --id <id>)",
-		"add-subtask (--task <name> | --task-id <id>) --name <name>",
+		"add-checklist-item (--task <name> | --task-id <id>) --name <name>",
 	}
 	for _, needle := range agentsRequired {
 		if !strings.Contains(agents, needle) {
@@ -40,7 +40,7 @@ func TestDocsSyncGate(t *testing.T) {
 	readmeRequired := []string{
 		"things-agent show-task --id",
 		"things-agent complete-task --id",
-		"things-agent add-subtask --task-id",
+		"things-agent add-checklist-item --task-id",
 	}
 	for _, needle := range readmeRequired {
 		if !strings.Contains(readme, needle) {
