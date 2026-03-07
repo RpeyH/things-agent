@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	restorePollInterval = 200 * time.Millisecond
-	restoreStopTimeout  = 5 * time.Second
+	restorePollInterval    = 200 * time.Millisecond
+	restoreStopTimeout     = 5 * time.Second
+	restoreStabilityTimeout = 2 * time.Second
+	restoreStablePasses    = 2
 )
 
 type appController interface {
@@ -56,22 +58,28 @@ func (c scriptAppController) Activate(ctx context.Context, bundleID string) erro
 }
 
 type restoreExecutor struct {
-	backups      *backupManager
-	bundleID     string
-	app          appController
-	sleep        func(time.Duration)
-	pollInterval time.Duration
-	stopTimeout  time.Duration
+	backups          *backupManager
+	bundleID         string
+	app              appController
+	sleep            func(time.Duration)
+	pollInterval     time.Duration
+	stopTimeout      time.Duration
+	stabilityTimeout time.Duration
+	stablePasses     int
+	captureFileState func(string) ([]liveFileState, error)
 }
 
 func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 	return &restoreExecutor{
-		backups:      newBackupManager(cfg.dataDir),
-		bundleID:     cfg.bundleID,
-		app:          scriptAppController{runner: cfg.runner},
-		sleep:        time.Sleep,
-		pollInterval: restorePollInterval,
-		stopTimeout:  restoreStopTimeout,
+		backups:          newBackupManager(cfg.dataDir),
+		bundleID:         cfg.bundleID,
+		app:              scriptAppController{runner: cfg.runner},
+		sleep:            time.Sleep,
+		pollInterval:     restorePollInterval,
+		stopTimeout:      restoreStopTimeout,
+		stabilityTimeout: restoreStabilityTimeout,
+		stablePasses:     restoreStablePasses,
+		captureFileState: captureLiveFileState,
 	}
 }
 
@@ -95,15 +103,6 @@ func (r *restoreExecutor) Restore(ctx context.Context, timestamp string) ([]stri
 		return nil, err
 	}
 
-	preRestoreBackup, err := r.backups.Create(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("pre-restore backup failed: %w", err)
-	}
-	preRestoreTS := inferTimestamp(preRestoreBackup[0])
-	if preRestoreTS == "" {
-		return nil, errors.New("pre-restore backup timestamp could not be inferred")
-	}
-
 	if wasRunning {
 		if err := r.app.Quit(ctx, r.bundleID); err != nil {
 			return nil, err
@@ -111,6 +110,18 @@ func (r *restoreExecutor) Restore(ctx context.Context, timestamp string) ([]stri
 		if err := r.waitForStopped(ctx); err != nil {
 			return nil, err
 		}
+	}
+	if err := r.waitForStableFiles(ctx); err != nil {
+		return nil, err
+	}
+
+	preRestoreBackup, err := r.backups.Create(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pre-restore backup failed: %w", err)
+	}
+	preRestoreTS := inferTimestamp(preRestoreBackup[0])
+	if preRestoreTS == "" {
+		return nil, errors.New("pre-restore backup timestamp could not be inferred")
 	}
 
 	restored, err := r.backups.Restore(ctx, timestamp)
@@ -144,6 +155,40 @@ func (r *restoreExecutor) waitForStopped(ctx context.Context) error {
 		}
 		if time.Now().After(deadline) {
 			return fmt.Errorf("Things did not stop within %s", r.stopTimeout)
+		}
+		r.sleep(r.pollInterval)
+	}
+}
+
+func (r *restoreExecutor) waitForStableFiles(ctx context.Context) error {
+	deadline := time.Now().Add(r.stabilityTimeout)
+	requiredPasses := r.stablePasses
+	if requiredPasses <= 0 {
+		requiredPasses = restoreStablePasses
+	}
+
+	var previous []liveFileState
+	stableCount := 0
+	for {
+		current, err := r.captureFileState(r.backups.dataDir)
+		if err != nil {
+			return fmt.Errorf("capture live file state: %w", err)
+		}
+		if liveFileStatesEqual(previous, current) {
+			stableCount++
+			if stableCount >= requiredPasses {
+				return nil
+			}
+		} else {
+			stableCount = 1
+			previous = current
+		}
+
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("Things database files did not stabilize within %s", r.stabilityTimeout)
 		}
 		r.sleep(r.pollInterval)
 	}
@@ -237,6 +282,40 @@ func filesEqual(left, right string) (bool, error) {
 }
 
 func bytesEqual(left, right []byte) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+type liveFileState struct {
+	Name    string
+	Size    int64
+	ModTime int64
+}
+
+func captureLiveFileState(dataDir string) ([]liveFileState, error) {
+	states := make([]liveFileState, 0, 3)
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		info, err := os.Stat(filepath.Join(dataDir, base))
+		if err != nil {
+			return nil, err
+		}
+		states = append(states, liveFileState{
+			Name:    base,
+			Size:    info.Size(),
+			ModTime: info.ModTime().UnixNano(),
+		})
+	}
+	return states, nil
+}
+
+func liveFileStatesEqual(left, right []liveFileState) bool {
 	if len(left) != len(right) {
 		return false
 	}

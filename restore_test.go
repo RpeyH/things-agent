@@ -14,7 +14,7 @@ import (
 type fakeAppController struct {
 	mu           sync.Mutex
 	running      []bool
-	quitCalls    int
+	quitCalls     int
 	activateCalls int
 	quitErr      error
 	activateErr  error
@@ -76,6 +76,26 @@ func readLiveDBFile(t *testing.T, dir, base string) string {
 	return string(data)
 }
 
+func newTestRestoreExecutor(bm *backupManager, app appController) *restoreExecutor {
+	return &restoreExecutor{
+		backups:          bm,
+		bundleID:         defaultBundleID,
+		app:              app,
+		sleep:            func(time.Duration) {},
+		pollInterval:     time.Millisecond,
+		stopTimeout:      time.Second,
+		stabilityTimeout: time.Second,
+		stablePasses:     2,
+		captureFileState: func(string) ([]liveFileState, error) {
+			return []liveFileState{
+				{Name: "main.sqlite", Size: 1, ModTime: 1},
+				{Name: "main.sqlite-shm", Size: 1, ModTime: 1},
+				{Name: "main.sqlite-wal", Size: 1, ModTime: 1},
+			}, nil
+		},
+	}
+}
+
 func TestRestoreExecutorRestoresAndReopensWhenAppWasRunning(t *testing.T) {
 	tmp := t.TempDir()
 	writeLiveDBSet(t, tmp, "before")
@@ -89,14 +109,7 @@ func TestRestoreExecutorRestoresAndReopensWhenAppWasRunning(t *testing.T) {
 	writeLiveDBSet(t, tmp, "after")
 
 	app := &fakeAppController{running: []bool{true, true, false}}
-	exec := &restoreExecutor{
-		backups:      bm,
-		bundleID:     defaultBundleID,
-		app:          app,
-		sleep:        func(time.Duration) {},
-		pollInterval: time.Millisecond,
-		stopTimeout:  time.Second,
-	}
+	exec := newTestRestoreExecutor(bm, app)
 
 	restored, err := exec.Restore(context.Background(), targetTS)
 	if err != nil {
@@ -141,14 +154,7 @@ func TestRestoreExecutorRollsBackOnCopyFailure(t *testing.T) {
 	}
 
 	app := &fakeAppController{running: []bool{true, false}}
-	exec := &restoreExecutor{
-		backups:      bm,
-		bundleID:     defaultBundleID,
-		app:          app,
-		sleep:        func(time.Duration) {},
-		pollInterval: time.Millisecond,
-		stopTimeout:  time.Second,
-	}
+	exec := newTestRestoreExecutor(bm, app)
 
 	_, err = exec.Restore(context.Background(), targetTS)
 	if err == nil || !strings.Contains(err.Error(), "rollback succeeded") {
@@ -183,14 +189,7 @@ func TestRestoreExecutorSkipsLifecycleWhenAppWasNotRunning(t *testing.T) {
 	writeLiveDBSet(t, tmp, "after")
 
 	app := &fakeAppController{running: []bool{false}}
-	exec := &restoreExecutor{
-		backups:      bm,
-		bundleID:     defaultBundleID,
-		app:          app,
-		sleep:        func(time.Duration) {},
-		pollInterval: time.Millisecond,
-		stopTimeout:  time.Second,
-	}
+	exec := newTestRestoreExecutor(bm, app)
 
 	if _, err := exec.Restore(context.Background(), targetTS); err != nil {
 		t.Fatalf("restore failed: %v", err)
@@ -214,18 +213,88 @@ func TestRestoreExecutorTimesOutIfAppDoesNotStop(t *testing.T) {
 	targetTS := inferTimestamp(created[0])
 
 	app := &fakeAppController{running: []bool{true, true, true, true}}
-	exec := &restoreExecutor{
-		backups:      bm,
-		bundleID:     defaultBundleID,
-		app:          app,
-		sleep:        func(time.Duration) {},
-		pollInterval: time.Millisecond,
-		stopTimeout:  time.Nanosecond,
-	}
+	exec := newTestRestoreExecutor(bm, app)
+	exec.stopTimeout = time.Nanosecond
 
 	_, err = exec.Restore(context.Background(), targetTS)
 	if err == nil || !strings.Contains(err.Error(), "did not stop") {
 		t.Fatalf("expected stop timeout, got %v", err)
+	}
+}
+
+func TestRestoreExecutorWaitsForStableFiles(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	exec := &restoreExecutor{
+		backups:          newBackupManager(tmp),
+		app:              &fakeAppController{},
+		bundleID:         defaultBundleID,
+		sleep:            func(time.Duration) {},
+		pollInterval:     time.Millisecond,
+		stabilityTimeout: time.Second,
+		stablePasses:     2,
+	}
+
+	states := [][]liveFileState{
+		{
+			{Name: "main.sqlite", Size: 1, ModTime: 1},
+			{Name: "main.sqlite-shm", Size: 1, ModTime: 1},
+			{Name: "main.sqlite-wal", Size: 1, ModTime: 1},
+		},
+		{
+			{Name: "main.sqlite", Size: 2, ModTime: 2},
+			{Name: "main.sqlite-shm", Size: 2, ModTime: 2},
+			{Name: "main.sqlite-wal", Size: 2, ModTime: 2},
+		},
+		{
+			{Name: "main.sqlite", Size: 2, ModTime: 2},
+			{Name: "main.sqlite-shm", Size: 2, ModTime: 2},
+			{Name: "main.sqlite-wal", Size: 2, ModTime: 2},
+		},
+	}
+	var index int
+	exec.captureFileState = func(string) ([]liveFileState, error) {
+		if index >= len(states) {
+			return states[len(states)-1], nil
+		}
+		current := states[index]
+		index++
+		return current, nil
+	}
+
+	if err := exec.waitForStableFiles(context.Background()); err != nil {
+		t.Fatalf("waitForStableFiles failed: %v", err)
+	}
+	if index < 3 {
+		t.Fatalf("expected multiple stability probes, got %d", index)
+	}
+}
+
+func TestRestoreExecutorStableFilesTimeout(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	exec := &restoreExecutor{
+		backups:          newBackupManager(tmp),
+		app:              &fakeAppController{},
+		bundleID:         defaultBundleID,
+		sleep:            func(time.Duration) {},
+		pollInterval:     time.Millisecond,
+		stabilityTimeout: time.Nanosecond,
+		stablePasses:     2,
+		captureFileState: func(string) ([]liveFileState, error) {
+			return []liveFileState{
+				{Name: "main.sqlite", Size: time.Now().UnixNano(), ModTime: time.Now().UnixNano()},
+				{Name: "main.sqlite-shm", Size: 1, ModTime: 1},
+				{Name: "main.sqlite-wal", Size: 1, ModTime: 1},
+			}, nil
+		},
+	}
+
+	err := exec.waitForStableFiles(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "did not stabilize") {
+		t.Fatalf("expected stability timeout, got %v", err)
 	}
 }
 
