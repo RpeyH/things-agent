@@ -49,6 +49,7 @@ func TestDocsSyncGate(t *testing.T) {
 		"edit-area --name <name> --new-name <name>",
 		"delete-area --name <name>",
 		"No stable backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.",
+		"Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` may return `ok` even when nothing changes.",
 	}
 	for _, needle := range agentsRequired {
 		if !strings.Contains(agents, needle) {
@@ -66,7 +67,7 @@ func TestDocsSyncGate(t *testing.T) {
 		"things-agent reorder-project-items --project-id",
 		"things-agent areas",
 		"things-agent add-area --name",
-		"The CLI can move a task to an existing heading with `move-task --to-heading` or `--to-heading-id`",
+		"Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` or `--to-heading-id` may return `ok` even when nothing changes.",
 	}
 	for _, needle := range readmeRequired {
 		if !strings.Contains(readme, needle) {

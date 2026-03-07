@@ -237,7 +237,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule.
 | Projects | `add-project --area <name>`, `edit-project (--name|--id)`, `delete-project (--name|--id)`, `move-project (--name|--id)` | Project CRUD and area moves |
 | Areas | `add-area`, `edit-area`, `delete-area`, `reorder-area-items (--area|--area-id)` | Area CRUD; reorder uses a private Things backend |
 | Checklist items | `add-checklist-item (--task|--task-id)` | Native checklist write path; requires token |
-| Tasks | `move-task (--name|--id)` | Move to an area, project, or existing heading |
+| Tasks | `move-task (--name|--id)` | Move to an area or project; heading destinations are not reliable yet |
 | Child tasks | `list-child-tasks (--parent|--parent-id)`, `add-child-task (--parent|--parent-id)`, `edit-child-task (--id or --parent/--parent-id + --name/--index)`, `delete-child-task (--id or --parent/--parent-id + --name/--index)`, `complete-child-task (--id or --parent/--parent-id + --name/--index)`, `uncomplete-child-task (--id or --parent/--parent-id + --name/--index)`, `reorder-project-items (--project|--project-id)` | Explicit AppleScript child-task surface for projects; direct `--id` is supported for mutations; reorder uses a private Things backend |
 | URL Scheme bridge | `url add|update|add-project|update-project|show|search|version|json` | Direct mapping of Things URL Scheme |
 | CLI info | `version` | Print CLI version |
@@ -252,7 +252,8 @@ Reordering notes:
 
 - `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things backend rather than a stable public API.
 - `reorder-area-items` cannot freely interleave projects and tasks inside an area; live testing shows Things still keeps projects before tasks.
-- The CLI can move a task to an existing heading with `move-task --to-heading` or `--to-heading-id`, but it does not yet provide first-class `heading-*` commands for listing, creating, editing, deleting, or reordering headings.
+- Official Things documentation exposes heading creation through Shortcuts and the macOS UI, but this CLI does not have a reliable headless heading backend yet.
+- Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` or `--to-heading-id` may return `ok` even when nothing changes.
 - No stable backend is available yet for checklist-item reorder or sidebar area reorder.
 
 ### URL Scheme API Mapping

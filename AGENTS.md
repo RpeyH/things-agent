@@ -97,7 +97,7 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent delete-area --name <name>` | Delete area | yes | Destructive |
 | `things-agent reorder-area-items (--area <name> | --area-id <id>) --ids <csv>` | Reorder area items | yes | Uses private/experimental Things AppleScript backend; live testing shows projects still stay before tasks |
 | `things-agent add-checklist-item (--task <name> | --task-id <id>) --name <name>` | Add checklist item | yes | Requires token |
-| `things-agent move-task (--name <name> | --id <id>) (--to-area <name> | --to-area-id <id> | --to-project <name> | --to-project-id <id> | --to-heading <name> | --to-heading-id <id>)` | Move task to another area, project, or existing heading | yes | Write operation via official URL update |
+| `things-agent move-task (--name <name> | --id <id>) (--to-area <name> | --to-area-id <id> | --to-project <name> | --to-project-id <id> | --to-heading <name> | --to-heading-id <id>)` | Move task to another area, project, or existing heading | yes | Write operation via official URL update; heading targets are not verified reliably yet |
 | `things-agent list-child-tasks (--parent <name> | --parent-id <id>)` | List child tasks under a project | no | Read operation |
 | `things-agent add-child-task (--parent <name> | --parent-id <id>) --name <name> [--notes <text>]` | Add a child task under a project | yes | Write operation |
 | `things-agent edit-child-task --id <id>` or `things-agent edit-child-task (--parent <name> | --parent-id <id>) [--name <name> | --index <n>] ...` | Edit a child task | yes | Write operation |
@@ -119,7 +119,8 @@ The agent should treat this table as the current command surface of the CLI.
 - `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things AppleScript backend, not a stable public API.
 - Live validation shows `reorder-area-items` cannot freely interleave projects and tasks: Things still keeps projects before tasks inside an area.
 - No stable backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.
-- `move-task` can target an existing heading through the official URL update surface, but the CLI does not yet expose a first-class `heading-*` family for listing, creating, editing, deleting, or reordering headings.
+- Official Things documentation exposes heading creation through Shortcuts and the macOS UI, but this CLI does not have a reliable headless heading backend yet.
+- Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` may return `ok` even when nothing changes.
 
 ## Expected Operations to Implement / Document
 
