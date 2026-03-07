@@ -254,6 +254,7 @@ Reordering notes:
 - `reorder-area-items` cannot freely interleave projects and tasks inside an area; live testing shows Things still keeps projects before tasks.
 - Official Things documentation exposes heading creation through Shortcuts and the macOS UI, but this CLI does not have a reliable headless heading backend yet.
 - Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` or `--to-heading-id` may return `ok` even when nothing changes.
+- For now, create headings manually in Things, then return to the CLI for tasks, tags, notes, dates, and other verified operations.
 - No stable backend is available yet for checklist-item reorder or sidebar area reorder.
 
 ### URL Scheme API Mapping

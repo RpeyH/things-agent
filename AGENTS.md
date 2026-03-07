@@ -121,6 +121,7 @@ The agent should treat this table as the current command surface of the CLI.
 - No stable backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.
 - Official Things documentation exposes heading creation through Shortcuts and the macOS UI, but this CLI does not have a reliable headless heading backend yet.
 - Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` may return `ok` even when nothing changes.
+- For now, create headings manually in Things, then return to the CLI for tasks, tags, notes, dates, and other verified operations.
 
 ## Expected Operations to Implement / Document
 
