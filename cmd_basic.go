@@ -98,6 +98,8 @@ func newBackupCmd() *cobra.Command {
 
 func newRestoreCmd() *cobra.Command {
 	var timestamp string
+	var dryRun bool
+	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Safely restore a backup timestamp (latest by default)",
@@ -107,18 +109,27 @@ func newRestoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			restored, err := newRestoreExecutor(cfg).Restore(ctx, timestamp)
+			journal, err := newRestoreExecutor(cfg).Execute(ctx, timestamp, dryRun)
 			if err != nil {
 				return err
 			}
-			for _, p := range restored {
+			if jsonOutput {
+				return writeJSON(journal)
+			}
+			if dryRun {
+				fmt.Printf("%s\tdry-run=true\tok=%t\n", journal.Timestamp, journal.Preflight.OK)
+				return nil
+			}
+			for _, p := range journal.RestoredFiles {
 				fmt.Println(p)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to restore (YYYY-MM-DD:HH-MM-SS)")
-	cmd.AddCommand(newRestoreListCmd(), newRestoreVerifyCmd())
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run restore preflight only without mutating live files")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
+	cmd.AddCommand(newRestoreListCmd(), newRestorePreflightCmd(), newRestoreVerifyCmd())
 	return cmd
 }
 
@@ -162,31 +173,48 @@ func newRestoreVerifyCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			snapshot, err := newBackupManager(cfg.dataDir).Verify(ctx, timestamp)
-			if err != nil {
+			payload, err := newRestoreExecutor(cfg).Verify(ctx, timestamp)
+			if jsonOutput {
+				if writeErr := writeJSON(payload); writeErr != nil {
+					return writeErr
+				}
 				return err
 			}
-			payload := struct {
-				Timestamp string   `json:"timestamp"`
-				Match     bool     `json:"match"`
-				Complete  bool     `json:"complete"`
-				Files     []string `json:"files"`
-			}{
-				Timestamp: snapshot.Timestamp,
-				Match:     true,
-				Complete:  snapshot.Complete,
-				Files:     snapshot.Files,
-			}
-			if jsonOutput {
-				return writeJSON(payload)
-			}
-			fmt.Printf("%s\tmatch=true\tcomplete=%t\tfiles=%d\n", payload.Timestamp, payload.Complete, len(payload.Files))
-			return nil
+			fmt.Printf("%s\tmatch=%t\tcomplete=%t\tfiles=%d\n", payload.Timestamp, payload.Match, payload.Complete, len(payload.Files))
+			return err
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to verify (YYYY-MM-DD:HH-MM-SS)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
 	_ = cmd.MarkFlagRequired("timestamp")
+	return cmd
+}
+
+func newRestorePreflightCmd() *cobra.Command {
+	var timestamp string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "preflight",
+		Short: "Validate restore readiness without mutating live files",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			payload, err := newRestoreExecutor(cfg).Preflight(ctx, timestamp)
+			if err != nil {
+				return err
+			}
+			if jsonOutput {
+				return writeJSON(payload)
+			}
+			fmt.Printf("%s\tok=%t\tcomplete=%t\tapp-running=%t\tstable=%t\n", payload.Timestamp, payload.OK, payload.Complete, payload.AppRunning, payload.LiveFilesStable)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to validate (YYYY-MM-DD:HH-MM-SS)")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
 	return cmd
 }
 

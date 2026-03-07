@@ -69,6 +69,65 @@ type restoreExecutor struct {
 	captureFileState func(string) ([]liveFileState, error)
 }
 
+type restorePreflightReport struct {
+	Timestamp        string   `json:"timestamp"`
+	Complete         bool     `json:"complete"`
+	Files            []string `json:"files"`
+	AppRunning       bool     `json:"app_running"`
+	QuiesceRequired  bool     `json:"quiesce_required"`
+	LiveFilesPresent bool     `json:"live_files_present"`
+	LiveFilesStable  bool     `json:"live_files_stable"`
+	BackupWritable   bool     `json:"backup_writable"`
+	OK               bool     `json:"ok"`
+}
+
+type restoreVerifiedFile struct {
+	Name     string `json:"name"`
+	Snapshot string `json:"snapshot"`
+	Live     string `json:"live"`
+	Match    bool   `json:"match"`
+	Error    string `json:"error,omitempty"`
+}
+
+type restoreVerificationReport struct {
+	Timestamp string                `json:"timestamp"`
+	Match     bool                  `json:"match"`
+	Complete  bool                  `json:"complete"`
+	Files     []restoreVerifiedFile `json:"files"`
+}
+
+type restoreBackupRecord struct {
+	Timestamp string   `json:"timestamp"`
+	Files     []string `json:"files"`
+}
+
+type restoreRollbackReport struct {
+	Attempted bool   `json:"attempted"`
+	Timestamp string `json:"timestamp,omitempty"`
+	Succeeded bool   `json:"succeeded"`
+	Error     string `json:"error,omitempty"`
+}
+
+type restoreJournalStep struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+type restoreJournal struct {
+	RequestedTimestamp string                    `json:"requested_timestamp,omitempty"`
+	Timestamp          string                    `json:"timestamp"`
+	DryRun             bool                      `json:"dry_run"`
+	Outcome            string                    `json:"outcome"`
+	AppWasRunning      bool                      `json:"app_was_running"`
+	Preflight          restorePreflightReport    `json:"preflight"`
+	PreRestoreBackup   *restoreBackupRecord      `json:"pre_restore_backup,omitempty"`
+	RestoredFiles      []string                  `json:"restored_files,omitempty"`
+	Verification       *restoreVerificationReport `json:"verification,omitempty"`
+	Rollback           *restoreRollbackReport    `json:"rollback,omitempty"`
+	Steps              []restoreJournalStep      `json:"steps"`
+}
+
 func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 	return &restoreExecutor{
 		backups:          newBackupManager(cfg.dataDir),
@@ -84,60 +143,174 @@ func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 }
 
 func (r *restoreExecutor) Restore(ctx context.Context, timestamp string) ([]string, error) {
+	journal, err := r.Execute(ctx, timestamp, false)
+	if err != nil {
+		return nil, err
+	}
+	return journal.RestoredFiles, nil
+}
+
+func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun bool) (restoreJournal, error) {
+	journal := restoreJournal{
+		RequestedTimestamp: strings.TrimSpace(timestamp),
+		DryRun:             dryRun,
+		Outcome:            "failed",
+	}
+
+	preflight, err := r.Preflight(ctx, timestamp)
+	journal.Preflight = preflight
+	journal.Timestamp = preflight.Timestamp
+	journal.AppWasRunning = preflight.AppRunning
+	if err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "preflight", Status: "failed", Error: err.Error()})
+		return journal, err
+	}
+	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "preflight", Status: "ok"})
+
+	if dryRun {
+		journal.Outcome = "dry-run"
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "dry-run", Status: "ok"})
+		return journal, nil
+	}
+
+	if preflight.AppRunning {
+		if err := r.app.Quit(ctx, r.bundleID); err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "quiesce", Status: "failed", Error: err.Error()})
+			return journal, err
+		}
+		if err := r.waitForStopped(ctx); err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "quiesce", Status: "failed", Error: err.Error()})
+			return journal, err
+		}
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "quiesce", Status: "ok"})
+	} else {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "quiesce", Status: "skipped"})
+	}
+
+	if err := r.waitForStableFiles(ctx); err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "stable-files", Status: "failed", Error: err.Error()})
+		return journal, err
+	}
+	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "stable-files", Status: "ok"})
+
+	preRestoreBackup, err := r.backups.Create(ctx)
+	if err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "failed", Error: err.Error()})
+		return journal, fmt.Errorf("pre-restore backup failed: %w", err)
+	}
+	preRestoreTS := inferTimestamp(preRestoreBackup[0])
+	if preRestoreTS == "" {
+		err := errors.New("pre-restore backup timestamp could not be inferred")
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "failed", Error: err.Error()})
+		return journal, err
+	}
+	journal.PreRestoreBackup = &restoreBackupRecord{Timestamp: preRestoreTS, Files: preRestoreBackup}
+	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "ok"})
+
+	restored, err := r.backups.Restore(ctx, preflight.Timestamp)
+	if err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore", Status: "failed", Error: err.Error()})
+		rollback, restoreErr := r.restoreFailure(ctx, preRestoreTS, preflight.AppRunning, fmt.Errorf("restore snapshot %s: %w", preflight.Timestamp, err))
+		journal.Rollback = rollback
+		return journal, restoreErr
+	}
+	journal.RestoredFiles = restored
+	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore", Status: "ok"})
+
+	verification, err := r.Verify(ctx, preflight.Timestamp)
+	journal.Verification = &verification
+	if err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "failed", Error: err.Error()})
+		rollback, restoreErr := r.restoreFailure(ctx, preRestoreTS, preflight.AppRunning, fmt.Errorf("verify restored snapshot %s: %w", preflight.Timestamp, err))
+		journal.Rollback = rollback
+		return journal, restoreErr
+	}
+	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "ok"})
+
+	if preflight.AppRunning {
+		if err := r.app.Activate(ctx, r.bundleID); err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reopen", Status: "failed", Error: err.Error()})
+			return journal, err
+		}
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reopen", Status: "ok"})
+	} else {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reopen", Status: "skipped"})
+	}
+
+	journal.Outcome = "restored"
+	return journal, nil
+}
+
+func (r *restoreExecutor) resolveTimestamp(ctx context.Context, timestamp string) (string, error) {
 	timestamp = strings.TrimSpace(timestamp)
 	if timestamp == "" {
 		latest, err := r.backups.Latest(ctx)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		timestamp = latest
 	}
+	return timestamp, nil
+}
 
-	targetFiles, err := r.backups.FilesForTimestamp(ctx, timestamp)
+func (r *restoreExecutor) Preflight(ctx context.Context, timestamp string) (restorePreflightReport, error) {
+	resolvedTS, err := r.resolveTimestamp(ctx, timestamp)
 	if err != nil {
-		return nil, err
+		return restorePreflightReport{}, err
+	}
+
+	targetFiles, err := r.backups.FilesForTimestamp(ctx, resolvedTS)
+	if err != nil {
+		return restorePreflightReport{Timestamp: resolvedTS}, err
+	}
+	report := restorePreflightReport{
+		Timestamp: resolvedTS,
+		Complete:  true,
+		Files:     targetFiles,
 	}
 
 	wasRunning, err := r.app.IsRunning(ctx, r.bundleID)
 	if err != nil {
-		return nil, err
+		return report, err
 	}
+	report.AppRunning = wasRunning
+	report.QuiesceRequired = wasRunning
 
-	if wasRunning {
-		if err := r.app.Quit(ctx, r.bundleID); err != nil {
-			return nil, err
-		}
-		if err := r.waitForStopped(ctx); err != nil {
-			return nil, err
-		}
+	if _, err := r.captureFileState(r.backups.dataDir); err != nil {
+		return report, fmt.Errorf("inspect live database files: %w", err)
 	}
-	if err := r.waitForStableFiles(ctx); err != nil {
-		return nil, err
-	}
+	report.LiveFilesPresent = true
 
-	preRestoreBackup, err := r.backups.Create(ctx)
+	if err := r.ensureBackupWritable(); err != nil {
+		return report, fmt.Errorf("check backup directory writability: %w", err)
+	}
+	report.BackupWritable = true
+
+	if !wasRunning {
+		if err := r.waitForStableFiles(ctx); err != nil {
+			return report, fmt.Errorf("preflight stable files: %w", err)
+		}
+		report.LiveFilesStable = true
+	}
+	report.OK = report.Complete && report.LiveFilesPresent && report.BackupWritable
+	if !wasRunning {
+		report.OK = report.OK && report.LiveFilesStable
+	}
+	return report, nil
+}
+
+func (r *restoreExecutor) Verify(ctx context.Context, timestamp string) (restoreVerificationReport, error) {
+	resolvedTS, err := r.resolveTimestamp(ctx, timestamp)
 	if err != nil {
-		return nil, fmt.Errorf("pre-restore backup failed: %w", err)
+		return restoreVerificationReport{}, err
 	}
-	preRestoreTS := inferTimestamp(preRestoreBackup[0])
-	if preRestoreTS == "" {
-		return nil, errors.New("pre-restore backup timestamp could not be inferred")
-	}
-
-	restored, err := r.backups.Restore(ctx, timestamp)
+	targetFiles, err := r.backups.FilesForTimestamp(ctx, resolvedTS)
 	if err != nil {
-		return nil, r.restoreFailure(ctx, preRestoreTS, wasRunning, fmt.Errorf("restore snapshot %s: %w", timestamp, err))
+		return restoreVerificationReport{Timestamp: resolvedTS}, err
 	}
-	if err := verifySnapshotAgainstLive(r.backups.dataDir, targetFiles); err != nil {
-		return nil, r.restoreFailure(ctx, preRestoreTS, wasRunning, fmt.Errorf("verify restored snapshot %s: %w", timestamp, err))
-	}
-
-	if wasRunning {
-		if err := r.app.Activate(ctx, r.bundleID); err != nil {
-			return restored, err
-		}
-	}
-	return restored, nil
+	report, err := buildSnapshotVerification(r.backups.dataDir, targetFiles)
+	report.Timestamp = resolvedTS
+	return report, verificationError(report)
 }
 
 func (r *restoreExecutor) waitForStopped(ctx context.Context) error {
@@ -194,31 +367,100 @@ func (r *restoreExecutor) waitForStableFiles(ctx context.Context) error {
 	}
 }
 
-func (r *restoreExecutor) restoreFailure(ctx context.Context, rollbackTS string, wasRunning bool, cause error) error {
+func (r *restoreExecutor) ensureBackupWritable() error {
+	dir, err := r.backups.ensureBackupDir()
+	if err != nil {
+		return err
+	}
+	probe, err := os.CreateTemp(dir, ".restore-preflight-*")
+	if err != nil {
+		return err
+	}
+	name := probe.Name()
+	if err := probe.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return os.Remove(name)
+}
+
+func (r *restoreExecutor) restoreFailure(ctx context.Context, rollbackTS string, wasRunning bool, cause error) (*restoreRollbackReport, error) {
+	report := &restoreRollbackReport{
+		Attempted: true,
+		Timestamp: rollbackTS,
+	}
 	_, rollbackErr := r.backups.Restore(ctx, rollbackTS)
 	if rollbackErr != nil {
-		return fmt.Errorf("%w; rollback failed: %v", cause, rollbackErr)
+		report.Error = rollbackErr.Error()
+		return report, fmt.Errorf("%w; rollback failed: %v", cause, rollbackErr)
 	}
+	report.Succeeded = true
 	if wasRunning {
 		if err := r.app.Activate(ctx, r.bundleID); err != nil {
-			return fmt.Errorf("%w; rollback succeeded; reopen failed: %v", cause, err)
+			report.Error = err.Error()
+			return report, fmt.Errorf("%w; rollback succeeded; reopen failed: %v", cause, err)
 		}
 	}
-	return fmt.Errorf("%w; rollback succeeded", cause)
+	return report, fmt.Errorf("%w; rollback succeeded", cause)
 }
 
 func verifySnapshotAgainstLive(dataDir string, snapshotFiles []string) error {
+	report, err := buildSnapshotVerification(dataDir, snapshotFiles)
+	if err != nil {
+		return err
+	}
+	return verificationError(report)
+}
+
+func buildSnapshotVerification(dataDir string, snapshotFiles []string) (restoreVerificationReport, error) {
+	report := restoreVerificationReport{
+		Match:    true,
+		Complete: len(snapshotFiles) == 3,
+		Files:    make([]restoreVerifiedFile, 0, len(snapshotFiles)),
+	}
+	var firstErr error
 	for _, snapshot := range snapshotFiles {
 		live := filepath.Join(dataDir, liveDBBaseName(snapshot))
+		fileReport := restoreVerifiedFile{
+			Name:     filepath.Base(live),
+			Snapshot: snapshot,
+			Live:     live,
+			Match:    true,
+		}
 		match, err := filesEqual(snapshot, live)
 		if err != nil {
-			return fmt.Errorf("compare %s with %s: %w", snapshot, live, err)
+			fileReport.Match = false
+			fileReport.Error = err.Error()
+			if firstErr == nil {
+				firstErr = fmt.Errorf("compare %s with %s: %w", snapshot, live, err)
+			}
+		} else if !match {
+			fileReport.Match = false
 		}
-		if !match {
-			return fmt.Errorf("live file mismatch for %s", filepath.Base(live))
+		if !fileReport.Match {
+			report.Match = false
+		}
+		report.Files = append(report.Files, fileReport)
+	}
+	return report, firstErr
+}
+
+func verificationError(report restoreVerificationReport) error {
+	if !report.Complete {
+		return errors.New("snapshot is incomplete")
+	}
+	if report.Match {
+		return nil
+	}
+	for _, file := range report.Files {
+		if file.Error != "" {
+			return fmt.Errorf("verification failed for %s: %s", file.Name, file.Error)
+		}
+		if !file.Match {
+			return fmt.Errorf("live file mismatch for %s", file.Name)
 		}
 	}
-	return nil
+	return errors.New("live files do not match snapshot")
 }
 
 func liveDBBaseName(snapshotPath string) string {

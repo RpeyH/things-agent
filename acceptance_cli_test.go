@@ -352,5 +352,78 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		if verify["timestamp"] != ts || verify["match"] != true || verify["complete"] != true {
 			t.Fatalf("unexpected restore verify payload: %#v", verify)
 		}
+		files, ok := verify["files"].([]any)
+		if !ok || len(files) != 3 {
+			t.Fatalf("expected three per-file verification entries, got %#v", verify["files"])
+		}
+		first, ok := files[0].(map[string]any)
+		if !ok || first["name"] == "" || first["match"] != true {
+			t.Fatalf("unexpected per-file verification entry: %#v", files[0])
+		}
+	})
+
+	t.Run("restore preflight reports readiness as structured json", func(t *testing.T) {
+		fr := &fakeRunner{}
+		setupTestRuntimeWithDB(t, fr)
+
+		if err := executeAcceptanceRoot(t, "backup"); err != nil {
+			t.Fatalf("expected backup to succeed: %v", err)
+		}
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore", "preflight", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore preflight to succeed: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+			t.Fatalf("decode restore preflight json: %v\nstdout=%q", err, stdout)
+		}
+		if payload["ok"] != true || payload["complete"] != true || payload["live_files_present"] != true || payload["backup_writable"] != true {
+			t.Fatalf("unexpected restore preflight payload: %#v", payload)
+		}
+	})
+
+	t.Run("restore dry-run emits structured journal without mutating live files", func(t *testing.T) {
+		fr := &fakeRunner{}
+		tmp := setupTestRuntimeWithDB(t, fr)
+
+		if err := executeAcceptanceRoot(t, "backup"); err != nil {
+			t.Fatalf("expected backup to succeed: %v", err)
+		}
+		entries, err := os.ReadDir(tmp + "/" + backupDirName)
+		if err != nil || len(entries) == 0 {
+			t.Fatalf("expected at least one backup entry, err=%v count=%d", err, len(entries))
+		}
+		ts := inferTimestamp(entries[0].Name())
+		before := readLiveDBFile(t, tmp, "main.sqlite")
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore", "--timestamp", ts, "--dry-run", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore --dry-run to succeed: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+			t.Fatalf("decode restore dry-run json: %v\nstdout=%q", err, stdout)
+		}
+		if payload["dry_run"] != true || payload["outcome"] != "dry-run" || payload["timestamp"] != ts {
+			t.Fatalf("unexpected restore dry-run payload: %#v", payload)
+		}
+		preflight, ok := payload["preflight"].(map[string]any)
+		if !ok || preflight["ok"] != true {
+			t.Fatalf("expected successful preflight in restore journal, got %#v", payload["preflight"])
+		}
+		steps, ok := payload["steps"].([]any)
+		if !ok || len(steps) == 0 {
+			t.Fatalf("expected restore journal steps, got %#v", payload["steps"])
+		}
+		if after := readLiveDBFile(t, tmp, "main.sqlite"); after != before {
+			t.Fatalf("expected dry-run to keep live database untouched: before=%q after=%q", before, after)
+		}
 	})
 }

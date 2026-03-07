@@ -131,6 +131,62 @@ func TestRestoreExecutorRestoresAndReopensWhenAppWasRunning(t *testing.T) {
 	}
 }
 
+func TestRestoreExecutorPreflightReportsReadyState(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+
+	app := &fakeAppController{running: []bool{false}}
+	exec := newTestRestoreExecutor(bm, app)
+
+	report, err := exec.Preflight(context.Background(), targetTS)
+	if err != nil {
+		t.Fatalf("preflight failed: %v", err)
+	}
+	if !report.OK || !report.Complete || !report.LiveFilesPresent || !report.BackupWritable {
+		t.Fatalf("unexpected preflight report: %#v", report)
+	}
+	if report.Timestamp != targetTS {
+		t.Fatalf("expected target timestamp %q, got %q", targetTS, report.Timestamp)
+	}
+}
+
+func TestRestoreExecutorDryRunReturnsJournalWithoutMutatingLiveFiles(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+	writeLiveDBSet(t, tmp, "after")
+
+	app := &fakeAppController{running: []bool{false}}
+	exec := newTestRestoreExecutor(bm, app)
+
+	journal, err := exec.Execute(context.Background(), targetTS, true)
+	if err != nil {
+		t.Fatalf("dry-run execute failed: %v", err)
+	}
+	if !journal.DryRun || journal.Outcome != "dry-run" {
+		t.Fatalf("unexpected dry-run journal: %#v", journal)
+	}
+	if journal.PreRestoreBackup != nil || len(journal.RestoredFiles) != 0 || journal.Verification != nil {
+		t.Fatalf("expected dry-run to skip backup/restore/verify, got %#v", journal)
+	}
+	if got := readLiveDBFile(t, tmp, "main.sqlite"); got != "main.sqlite:after" {
+		t.Fatalf("expected dry-run to keep main.sqlite untouched, got %q", got)
+	}
+}
+
 func TestRestoreExecutorRollsBackOnCopyFailure(t *testing.T) {
 	tmp := t.TempDir()
 	writeLiveDBSet(t, tmp, "before")
@@ -312,5 +368,37 @@ func TestVerifySnapshotAgainstLiveDetectsMismatch(t *testing.T) {
 	err = verifySnapshotAgainstLive(tmp, created)
 	if err == nil || !strings.Contains(err.Error(), "live file mismatch") {
 		t.Fatalf("expected live mismatch, got %v", err)
+	}
+}
+
+func TestBuildSnapshotVerificationReturnsPerFileDetails(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	writeLiveDBSet(t, tmp, "after")
+
+	report, err := buildSnapshotVerification(tmp, created)
+	if err != nil {
+		t.Fatalf("buildSnapshotVerification failed: %v", err)
+	}
+	if report.Match {
+		t.Fatalf("expected verification mismatch, got %#v", report)
+	}
+	if len(report.Files) != 3 {
+		t.Fatalf("expected per-file verification entries, got %#v", report.Files)
+	}
+	mismatches := 0
+	for _, file := range report.Files {
+		if !file.Match {
+			mismatches++
+		}
+	}
+	if mismatches == 0 {
+		t.Fatalf("expected at least one mismatching file, got %#v", report.Files)
 	}
 }
