@@ -33,6 +33,12 @@ func resolveRuntimeConfig(ctx context.Context) (*runtimeConfig, error) {
 }
 
 func backupIfNeeded(ctx context.Context, cfg *runtimeConfig) error {
+	_ = ctx
+	_ = cfg
+	return nil
+}
+
+func backupIfDestructive(ctx context.Context, cfg *runtimeConfig) error {
 	bm := newBackupManager(cfg.dataDir)
 	paths, err := bm.Create(ctx)
 	if err != nil {

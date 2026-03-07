@@ -136,7 +136,7 @@ func newTagsDeleteCmd() *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
+			if err := backupIfDestructive(ctx, cfg); err != nil {
 				return err
 			}
 			return runResult(ctx, cfg, scriptDeleteTag(cfg.bundleID, name))

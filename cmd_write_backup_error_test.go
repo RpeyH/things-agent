@@ -2,7 +2,7 @@ package main
 
 import "testing"
 
-func TestWriteCommandsReturnBackupErrorWhenDBIsMissing(t *testing.T) {
+func TestDestructiveCommandsReturnBackupErrorWhenDBIsMissing(t *testing.T) {
 	fr := &fakeRunner{output: "ok"}
 	setupTestRuntime(t, t.TempDir(), fr)
 
@@ -11,66 +11,42 @@ func TestWriteCommandsReturnBackupErrorWhenDBIsMissing(t *testing.T) {
 		cmd  func() error
 	}{
 		{
-			name: "add-list",
+			name: "delete-list",
 			cmd: func() error {
-				c := newAddListCmd()
+				c := newDeleteListCmd()
 				c.SetArgs([]string{"--name", "area"})
 				return c.Execute()
 			},
 		},
 		{
-			name: "add-project",
+			name: "delete-project",
 			cmd: func() error {
-				c := newAddProjectCmd()
+				c := newDeleteProjectCmd()
 				c.SetArgs([]string{"--name", "proj"})
 				return c.Execute()
 			},
 		},
 		{
-			name: "add-task",
+			name: "delete-task",
 			cmd: func() error {
-				c := newAddTaskCmd()
+				c := newDeleteTaskCmd()
 				c.SetArgs([]string{"--name", "task"})
 				return c.Execute()
 			},
 		},
 		{
-			name: "set-task-notes",
+			name: "tags delete",
 			cmd: func() error {
-				c := newSetTaskNotesCmd()
-				c.SetArgs([]string{"--name", "task", "--notes", "x"})
+				c := newTagsDeleteCmd()
+				c.SetArgs([]string{"--name", "tag"})
 				return c.Execute()
 			},
 		},
 		{
-			name: "complete-task",
+			name: "delete-child-task",
 			cmd: func() error {
-				c := newCompleteTaskCmd()
-				c.SetArgs([]string{"--name", "task"})
-				return c.Execute()
-			},
-		},
-		{
-			name: "add-checklist-item",
-			cmd: func() error {
-				c := newAddChecklistItemCmd()
-				c.SetArgs([]string{"--task", "task", "--name", "sub"})
-				return c.Execute()
-			},
-		},
-		{
-			name: "add-child-task",
-			cmd: func() error {
-				c := newAddChildTaskCmd()
+				c := newDeleteChildTaskCmd()
 				c.SetArgs([]string{"--parent", "task", "--name", "sub"})
-				return c.Execute()
-			},
-		},
-		{
-			name: "url add",
-			cmd: func() error {
-				c := newURLAddCmd()
-				c.SetArgs([]string{"--title", "x"})
 				return c.Execute()
 			},
 		},

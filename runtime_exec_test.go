@@ -22,18 +22,27 @@ func TestRunResultBranches(t *testing.T) {
 	}
 }
 
-func TestBackupIfNeededBranches(t *testing.T) {
+func TestBackupIfNeededIsNoOp(t *testing.T) {
+	ctx := context.Background()
+
+	cfg := &runtimeConfig{dataDir: t.TempDir()}
+	if err := backupIfNeeded(ctx, cfg); err != nil {
+		t.Fatalf("backupIfNeeded should be a no-op: %v", err)
+	}
+}
+
+func TestBackupIfDestructiveBranches(t *testing.T) {
 	ctx := context.Background()
 
 	cfgErr := &runtimeConfig{dataDir: t.TempDir()}
-	if err := backupIfNeeded(ctx, cfgErr); err == nil {
-		t.Fatal("backupIfNeeded should fail without backupable db files")
+	if err := backupIfDestructive(ctx, cfgErr); err == nil {
+		t.Fatal("backupIfDestructive should fail without backupable db files")
 	}
 
 	fr := &fakeRunner{}
 	tmp := setupTestRuntimeWithDB(t, fr)
 	cfgOK := &runtimeConfig{dataDir: tmp}
-	if err := backupIfNeeded(ctx, cfgOK); err != nil {
-		t.Fatalf("backupIfNeeded should succeed with db files: %v", err)
+	if err := backupIfDestructive(ctx, cfgOK); err != nil {
+		t.Fatalf("backupIfDestructive should succeed with db files: %v", err)
 	}
 }

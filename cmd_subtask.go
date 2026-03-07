@@ -187,7 +187,7 @@ func newDeleteChildTaskCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
+			if err := backupIfDestructive(ctx, cfg); err != nil {
 				return err
 			}
 			return runResult(ctx, cfg, scriptDeleteChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex))

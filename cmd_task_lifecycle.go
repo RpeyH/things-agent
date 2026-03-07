@@ -240,7 +240,7 @@ func newDeleteTaskCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
+			if err := backupIfDestructive(ctx, cfg); err != nil {
 				return err
 			}
 			return runResult(ctx, cfg, scriptDeleteTaskRef(cfg.bundleID, name, id))

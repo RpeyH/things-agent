@@ -148,7 +148,7 @@ func newDeleteProjectCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
+			if err := backupIfDestructive(ctx, cfg); err != nil {
 				return err
 			}
 			return runResult(ctx, cfg, scriptDeleteProjectRef(cfg.bundleID, name, id))
@@ -177,7 +177,7 @@ func newDeleteCmd(kind, name string) *cobra.Command {
 			if strings.TrimSpace(target) == "" {
 				return errors.New("--name is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
+			if err := backupIfDestructive(ctx, cfg); err != nil {
 				return err
 			}
 			script, err := scriptDelete(cfg.bundleID, kind, target)
