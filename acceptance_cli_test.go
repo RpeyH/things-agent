@@ -134,7 +134,7 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			fr := &fakeRunner{output: "ok"}
 			setupTestRuntimeWithDB(t, fr)
 
-			err := executeAcceptanceRoot(t, "url", "json", "--data", `{"items":[{"title":"operation:update"}]}`)
+			err := executeAcceptanceRoot(t, "url", "json", "--data", `[{"type":"to-do","attributes":{"title":"operation:update"}}]`)
 			if err != nil {
 				t.Fatalf("expected non-update payload to succeed without structural token requirement: %v", err)
 			}
@@ -151,9 +151,19 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			t.Setenv("THINGS_AUTH_TOKEN", "")
 			config.authToken = ""
 
-			err := executeAcceptanceRoot(t, "url", "json", "--data", `{"operation":"update","items":[]}`)
+			err := executeAcceptanceRoot(t, "url", "json", "--data", `[{"type":"to-do","id":"tid","operation":"update","attributes":{"title":"x"}}]`)
 			if err == nil || !strings.Contains(err.Error(), "auth-token is required") {
 				t.Fatalf("expected auth-token gate for update payload, got %v", err)
+			}
+		})
+
+		t.Run("legacy object payload is rejected", func(t *testing.T) {
+			fr := &fakeRunner{output: "ok"}
+			setupTestRuntimeWithDB(t, fr)
+
+			err := executeAcceptanceRoot(t, "url", "json", "--data", `{"items":[{"title":"x"}]}`)
+			if err == nil || !strings.Contains(err.Error(), "top-level JSON array") {
+				t.Fatalf("expected official array payload validation, got %v", err)
 			}
 		})
 	})

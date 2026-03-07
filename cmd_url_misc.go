@@ -29,14 +29,21 @@ func (flags urlCallbackFlags) apply(params map[string]string) {
 	setIfNotEmpty(params, "x-source", flags.xSource)
 }
 
-func urlJSONRequiresAuthToken(data string) (bool, error) {
-	var payload struct {
+func validateURLJSONPayload(data string) (bool, error) {
+	type payloadItem struct {
 		Operation string `json:"operation"`
 	}
-	if err := json.Unmarshal([]byte(data), &payload); err != nil {
-		return false, err
+
+	var items []payloadItem
+	if err := json.Unmarshal([]byte(data), &items); err != nil {
+		return false, errors.New("payload must be a top-level JSON array matching the official Things JSON format")
 	}
-	return strings.TrimSpace(payload.Operation) == "update", nil
+	for _, item := range items {
+		if strings.TrimSpace(item.Operation) == "update" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func newURLShowCmd() *cobra.Command {
@@ -133,7 +140,7 @@ func newURLJSONCommand(use, short, commandName string) *cobra.Command {
 			}
 			params := map[string]string{"data": data}
 			callbacks.apply(params)
-			requiresToken, err := urlJSONRequiresAuthToken(data)
+			requiresToken, err := validateURLJSONPayload(data)
 			if err != nil {
 				return err
 			}

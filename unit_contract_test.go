@@ -45,7 +45,7 @@ func TestUnitContracts(t *testing.T) {
 		setupTestRuntimeWithDB(t, fr)
 
 		cmd := newURLJSONCmd()
-		cmd.SetArgs([]string{"--data", `{"items":[{"title":"x"}]}`})
+		cmd.SetArgs([]string{"--data", `[{"type":"to-do","attributes":{"title":"x"}}]`})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("url json failed: %v", err)
 		}
@@ -79,7 +79,7 @@ func TestUnitContracts(t *testing.T) {
 
 		cmd := newURLJSONCmd()
 		cmd.SetArgs([]string{
-			"--data", `{"items":[{"title":"x"}]}`,
+			"--data", `[{"type":"to-do","attributes":{"title":"x"}}]`,
 			"--x-success", "raycast://done",
 			"--x-error", "raycast://error",
 			"--x-cancel", "raycast://cancel",
@@ -99,6 +99,18 @@ func TestUnitContracts(t *testing.T) {
 			if !strings.Contains(scripts, needle) {
 				t.Fatalf("expected callback parameter %q in script %s", needle, scripts)
 			}
+		}
+	})
+
+	t.Run("URLParityJSONPayloadShape", func(t *testing.T) {
+		fr := &fakeRunner{output: "ok"}
+		setupTestRuntimeWithDB(t, fr)
+
+		cmd := newURLJSONCmd()
+		cmd.SetArgs([]string{"--data", `{"items":[{"title":"x"}]}`})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "top-level JSON array") {
+			t.Fatalf("expected official JSON array validation, got %v", err)
 		}
 	})
 

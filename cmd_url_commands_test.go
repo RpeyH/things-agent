@@ -103,13 +103,13 @@ func TestURLCommandsExecute(t *testing.T) {
 		}
 
 		jsonCmd := newURLJSONCmd()
-		jsonCmd.SetArgs([]string{"--data", `{"items":[{"title":"x"}]}`, "--reveal", "--x-source", "codex"})
+		jsonCmd.SetArgs([]string{"--data", `[{"type":"to-do","attributes":{"title":"x"}}]`, "--reveal", "--x-source", "codex"})
 		if err := jsonCmd.Execute(); err != nil {
 			t.Fatalf("url json failed: %v", err)
 		}
 
 		jsonUpdate := newURLJSONCmd()
-		jsonUpdate.SetArgs([]string{"--data", `{"operation":"update","items":[]}`})
+		jsonUpdate.SetArgs([]string{"--data", `[{"type":"to-do","id":"tid","operation":"update","attributes":{"title":"y"}}]`})
 		if err := jsonUpdate.Execute(); err != nil {
 			t.Fatalf("url json update failed: %v", err)
 		}
@@ -129,7 +129,7 @@ func TestURLCommandsExecute(t *testing.T) {
 		t.Setenv("THINGS_AUTH_TOKEN", "")
 		config.authToken = ""
 		cmd := newURLJSONCmd()
-		cmd.SetArgs([]string{"--data", `{"operation":"update","items":[]}`})
+		cmd.SetArgs([]string{"--data", `[{"type":"to-do","id":"tid","operation":"update","attributes":{"title":"x"}}]`})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "auth-token is required") {
 			t.Fatalf("unexpected error: %v", err)
@@ -141,7 +141,7 @@ func TestURLCommandsExecute(t *testing.T) {
 		setupTestRuntimeWithDB(t, fr)
 
 		nonUpdate := newURLJSONCmd()
-		nonUpdate.SetArgs([]string{"--data", `{"items":[{"title":"operation:update"}]}`})
+		nonUpdate.SetArgs([]string{"--data", `[{"type":"to-do","attributes":{"title":"operation:update"}}]`})
 		if err := nonUpdate.Execute(); err != nil {
 			t.Fatalf("expected nested string not to trigger token requirement: %v", err)
 		}
@@ -149,10 +149,22 @@ func TestURLCommandsExecute(t *testing.T) {
 		t.Setenv("THINGS_AUTH_TOKEN", "")
 		config.authToken = ""
 		update := newURLJSONCmd()
-		update.SetArgs([]string{"--data", "{\n  \"operation\": \"update\",\n  \"items\": []\n}"})
+		update.SetArgs([]string{"--data", "[\n  {\n    \"type\": \"to-do\",\n    \"id\": \"tid\",\n    \"operation\": \"update\",\n    \"attributes\": {\"title\": \"x\"}\n  }\n]"})
 		err := update.Execute()
 		if err == nil || !strings.Contains(err.Error(), "auth-token is required") {
 			t.Fatalf("expected structural update to require token, got %v", err)
+		}
+	})
+
+	t.Run("url json rejects legacy object payload", func(t *testing.T) {
+		fr := &fakeRunner{output: "ok"}
+		setupTestRuntimeWithDB(t, fr)
+
+		cmd := newURLJSONCmd()
+		cmd.SetArgs([]string{"--data", `{"items":[{"title":"x"}]}`})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "top-level JSON array") {
+			t.Fatalf("expected legacy object payload rejection, got %v", err)
 		}
 	})
 }
