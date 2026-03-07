@@ -100,7 +100,7 @@ func newRestoreCmd() *cobra.Command {
 	var timestamp string
 	cmd := &cobra.Command{
 		Use:   "restore",
-		Short: "Restore a backup (latest by default)",
+		Short: "Safely restore a backup timestamp (latest by default)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -117,14 +117,14 @@ func newRestoreCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp set to restore")
+	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to restore (YYYY-MM-DD:HH-MM-SS)")
 	return cmd
 }
 
 func newSessionStartCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "session-start",
-		Short: "Initialiser la session (backup + purge des anciens backups)",
+		Short: "Create a session backup and prune old backups",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -146,7 +146,7 @@ func newSessionStartCmd() *cobra.Command {
 func newListsCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "lists",
-		Short: "Lister les domaines",
+		Short: "List Things areas/lists",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
