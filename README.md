@@ -128,6 +128,7 @@ things-agent session-start
 ```bash
 things-agent session-start
 things-agent backup
+things-agent restore list --json
 things-agent tasks --list "À classer"
 things-agent tasks --list "À classer" --json
 things-agent search --query "Wagner"
@@ -207,7 +208,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule.
 
 | Command group | Commands | Notes |
 | --- | --- | --- |
-| Session and backup | `session-start`, `backup`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>]` | `restore` creates a pre-restore backup, quiesces Things, verifies files, and rolls back on failure |
+| Session and backup | `session-start`, `backup`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `restore` creates a pre-restore backup, quiesces Things, verifies files, and rolls back on failure |
 | Core listing/search | `lists`, `projects [--json]`, `tasks [--list <name>] [--query <text>] [--json]`, `search --query <text> [--list <name>] [--json]`, `show-task --name <name> [--json]` | `--json` is intended for agent consumption |
 | Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task`, `edit-task`, `delete-task`, `complete-task`, `uncomplete-task` | Standard to-do operations |

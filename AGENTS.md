@@ -48,6 +48,8 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent session-start` | Create session backup + retention cleanup | yes | First command in a new session |
 | `things-agent backup` | Create backup manually | yes | Safe checkpoint |
 | `things-agent restore [--timestamp <YYYY-MM-DD:HH-MM-SS>]` | Restore a backup | yes | Critical operation; creates a pre-restore backup, quiesces Things, verifies files, rolls back on failure |
+| `things-agent restore list [--json]` | List available snapshots | no | Read operation for restore inventory |
+| `things-agent restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | Verify that live files match a snapshot | no | Read operation for restore safety |
 | `things-agent lists` | List Things areas/lists | no | Read operation |
 | `things-agent projects [--json]` | List projects | no | Read operation |
 | `things-agent tags list [--query <text>]` | List tags | no | Read operation |
