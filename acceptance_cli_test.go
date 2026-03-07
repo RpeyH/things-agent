@@ -262,4 +262,49 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			t.Fatalf("expected unsupported --file flag, got %v", err)
 		}
 	})
+
+	t.Run("restore discovery and verification expose deterministic state", func(t *testing.T) {
+		fr := &fakeRunner{}
+		tmp := setupTestRuntimeWithDB(t, fr)
+
+		if err := executeAcceptanceRoot(t, "backup"); err != nil {
+			t.Fatalf("expected backup to succeed: %v", err)
+		}
+
+		entries, err := os.ReadDir(tmp + "/" + backupDirName)
+		if err != nil || len(entries) == 0 {
+			t.Fatalf("expected at least one backup entry, err=%v count=%d", err, len(entries))
+		}
+		ts := inferTimestamp(entries[0].Name())
+
+		listStdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore", "list", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore list to succeed: %v", err)
+		}
+
+		var snapshots []map[string]any
+		if err := json.Unmarshal([]byte(listStdout), &snapshots); err != nil {
+			t.Fatalf("decode restore list json: %v\nstdout=%q", err, listStdout)
+		}
+		if len(snapshots) == 0 || snapshots[0]["timestamp"] == "" || snapshots[0]["complete"] != true {
+			t.Fatalf("unexpected restore list payload: %#v", snapshots)
+		}
+
+		verifyStdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore", "verify", "--timestamp", ts, "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore verify to succeed: %v", err)
+		}
+
+		var verify map[string]any
+		if err := json.Unmarshal([]byte(verifyStdout), &verify); err != nil {
+			t.Fatalf("decode restore verify json: %v\nstdout=%q", err, verifyStdout)
+		}
+		if verify["timestamp"] != ts || verify["match"] != true || verify["complete"] != true {
+			t.Fatalf("unexpected restore verify payload: %#v", verify)
+		}
+	})
 }

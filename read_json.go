@@ -39,6 +39,10 @@ func runJSONResult(ctx context.Context, cfg *runtimeConfig, script string, parse
 	if err != nil {
 		return err
 	}
+	return writeJSON(payload)
+}
+
+func writeJSON(payload any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetEscapeHTML(false)
 	return enc.Encode(payload)

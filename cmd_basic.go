@@ -118,6 +118,75 @@ func newRestoreCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to restore (YYYY-MM-DD:HH-MM-SS)")
+	cmd.AddCommand(newRestoreListCmd(), newRestoreVerifyCmd())
+	return cmd
+}
+
+func newRestoreListCmd() *cobra.Command {
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List restore snapshots",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			snapshots, err := newBackupManager(cfg.dataDir).List(ctx)
+			if err != nil {
+				return err
+			}
+			if jsonOutput {
+				return writeJSON(snapshots)
+			}
+			for _, snapshot := range snapshots {
+				fmt.Printf("%s\tcomplete=%t\tfiles=%d\n", snapshot.Timestamp, snapshot.Complete, len(snapshot.Files))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
+	return cmd
+}
+
+func newRestoreVerifyCmd() *cobra.Command {
+	var timestamp string
+	var jsonOutput bool
+	cmd := &cobra.Command{
+		Use:   "verify",
+		Short: "Verify that live files match a snapshot",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			snapshot, err := newBackupManager(cfg.dataDir).Verify(ctx, timestamp)
+			if err != nil {
+				return err
+			}
+			payload := struct {
+				Timestamp string   `json:"timestamp"`
+				Match     bool     `json:"match"`
+				Complete  bool     `json:"complete"`
+				Files     []string `json:"files"`
+			}{
+				Timestamp: snapshot.Timestamp,
+				Match:     true,
+				Complete:  snapshot.Complete,
+				Files:     snapshot.Files,
+			}
+			if jsonOutput {
+				return writeJSON(payload)
+			}
+			fmt.Printf("%s\tmatch=true\tcomplete=%t\tfiles=%d\n", payload.Timestamp, payload.Complete, len(payload.Files))
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to verify (YYYY-MM-DD:HH-MM-SS)")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
+	_ = cmd.MarkFlagRequired("timestamp")
 	return cmd
 }
 

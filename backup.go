@@ -18,6 +18,12 @@ type backupManager struct {
 	nowFn   func() time.Time
 }
 
+type backupSnapshot struct {
+	Timestamp string   `json:"timestamp"`
+	Complete  bool     `json:"complete"`
+	Files     []string `json:"files"`
+}
+
 func newBackupManager(dataDir string) *backupManager {
 	return &backupManager{
 		dataDir: dataDir,
@@ -68,6 +74,52 @@ func (bm *backupManager) Latest(ctx context.Context) (string, error) {
 		return "", errors.New("no backup available")
 	}
 	return candidates[0], nil
+}
+
+func (bm *backupManager) List(ctx context.Context) ([]backupSnapshot, error) {
+	_ = ctx
+	timestamps, err := bm.allTimestamps()
+	if err != nil {
+		return nil, err
+	}
+	snapshots := make([]backupSnapshot, 0, len(timestamps))
+	for _, ts := range timestamps {
+		files := make([]string, 0, 3)
+		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+			candidate := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
+			if _, err := os.Stat(candidate); err == nil {
+				files = append(files, candidate)
+			} else if err != nil && !os.IsNotExist(err) {
+				return nil, err
+			}
+		}
+		sort.Strings(files)
+		snapshots = append(snapshots, backupSnapshot{
+			Timestamp: ts,
+			Complete:  len(files) == 3,
+			Files:     files,
+		})
+	}
+	return snapshots, nil
+}
+
+func (bm *backupManager) Verify(ctx context.Context, ts string) (backupSnapshot, error) {
+	ts = strings.TrimSpace(ts)
+	if ts == "" {
+		return backupSnapshot{}, errors.New("timestamp is required")
+	}
+	files, err := bm.FilesForTimestamp(ctx, ts)
+	if err != nil {
+		return backupSnapshot{}, err
+	}
+	if err := verifySnapshotAgainstLive(bm.dataDir, files); err != nil {
+		return backupSnapshot{}, err
+	}
+	return backupSnapshot{
+		Timestamp: ts,
+		Complete:  true,
+		Files:     files,
+	}, nil
 }
 
 func (bm *backupManager) FilesForTimestamp(ctx context.Context, ts string) ([]string, error) {

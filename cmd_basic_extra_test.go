@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -127,5 +128,44 @@ func TestBackupCommandsFailWithoutDBFiles(t *testing.T) {
 	session := newSessionStartCmd()
 	if err := session.Execute(); err == nil {
 		t.Fatal("expected session-start failure without sqlite files")
+	}
+}
+
+func TestRestoreListAndVerifyCommands(t *testing.T) {
+	fr := &fakeRunner{}
+	setupTestRuntimeWithDB(t, fr)
+
+	backup := newBackupCmd()
+	if err := backup.Execute(); err != nil {
+		t.Fatalf("backup failed: %v", err)
+	}
+
+	list := newRestoreListCmd()
+	if err := list.Execute(); err != nil {
+		t.Fatalf("restore list failed: %v", err)
+	}
+
+	snapshotsCmd := newRestoreListCmd()
+	snapshotsCmd.SetArgs([]string{"--json"})
+	if err := snapshotsCmd.Execute(); err != nil {
+		t.Fatalf("restore list --json failed: %v", err)
+	}
+
+	manager := newBackupManager(config.dataDir)
+	ts, err := manager.Latest(context.Background())
+	if err != nil {
+		t.Fatalf("latest snapshot failed: %v", err)
+	}
+
+	verify := newRestoreVerifyCmd()
+	verify.SetArgs([]string{"--timestamp", ts})
+	if err := verify.Execute(); err != nil {
+		t.Fatalf("restore verify failed: %v", err)
+	}
+
+	verifyJSON := newRestoreVerifyCmd()
+	verifyJSON.SetArgs([]string{"--timestamp", ts, "--json"})
+	if err := verifyJSON.Execute(); err != nil {
+		t.Fatalf("restore verify --json failed: %v", err)
 	}
 }

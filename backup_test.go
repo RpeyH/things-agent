@@ -89,6 +89,38 @@ func TestBackupManagerCreateAndLatest(t *testing.T) {
 	}
 }
 
+func TestBackupManagerListAndVerify(t *testing.T) {
+	tmp := t.TempDir()
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		if err := os.WriteFile(filepath.Join(tmp, base), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write %s failed: %v", base, err)
+		}
+	}
+
+	bm := newBackupManager(tmp)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	ts := inferTimestamp(created[0])
+
+	snapshots, err := bm.List(context.Background())
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(snapshots) != 1 || snapshots[0].Timestamp != ts || !snapshots[0].Complete {
+		t.Fatalf("unexpected snapshots: %#v", snapshots)
+	}
+
+	snapshot, err := bm.Verify(context.Background(), ts)
+	if err != nil {
+		t.Fatalf("Verify failed: %v", err)
+	}
+	if snapshot.Timestamp != ts || !snapshot.Complete || len(snapshot.Files) != 3 {
+		t.Fatalf("unexpected verified snapshot: %#v", snapshot)
+	}
+}
+
 func TestBackupManagerCreateAvoidsTimestampCollisions(t *testing.T) {
 	tmp := t.TempDir()
 	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
