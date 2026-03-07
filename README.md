@@ -236,6 +236,13 @@ Reordering notes:
 - `reorder-area-items` can reorder projects relative to projects and tasks relative to tasks, but live testing shows Things still keeps projects before tasks inside an area.
 - No stable public backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.
 
+## Known Limits
+
+- `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things backend rather than a stable public API.
+- `reorder-area-items` cannot freely interleave projects and tasks inside an area; live testing shows Things still keeps projects before tasks.
+- The CLI can move a task to an existing heading with `move-task --to-heading` or `--to-heading-id`, but it does not yet provide first-class `heading-*` commands for listing, creating, editing, deleting, or reordering headings.
+- No stable backend is available yet for checklist-item reorder or sidebar area reorder.
+
 ### URL Scheme API Mapping
 
 | CLI command | Things URL endpoint | Supported options |

@@ -40,6 +40,8 @@ func TestDocsSyncGate(t *testing.T) {
 		"move-project (--name <name> | --id <id>)",
 		"reorder-project-items (--project <name> | --project-id <id>) --ids <csv>",
 		"reorder-area-items (--area <name> | --area-id <id>) --ids <csv>",
+		"## Known Limits",
+		"No stable backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.",
 	}
 	for _, needle := range agentsRequired {
 		if !strings.Contains(agents, needle) {
@@ -55,6 +57,8 @@ func TestDocsSyncGate(t *testing.T) {
 		"things-agent move-task --id",
 		"things-agent move-project --id",
 		"things-agent reorder-project-items --project-id",
+		"## Known Limits",
+		"The CLI can move a task to an existing heading with `move-task --to-heading` or `--to-heading-id`",
 	}
 	for _, needle := range readmeRequired {
 		if !strings.Contains(readme, needle) {

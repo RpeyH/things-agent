@@ -99,6 +99,13 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent url version` | Things URL Scheme `version` | no | URL scheme info |
 | `things-agent url json --data '<json-array>'` | Things URL Scheme `json` | yes | Official top-level JSON array; token required when any item uses `operation:update` |
 
+## Known Limits
+
+- `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things AppleScript backend, not a stable public API.
+- Live validation shows `reorder-area-items` cannot freely interleave projects and tasks: Things still keeps projects before tasks inside an area.
+- No stable backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.
+- `move-task` can target an existing heading through the official URL update surface, but the CLI does not yet expose a first-class `heading-*` family for listing, creating, editing, deleting, or reordering headings.
+
 ## Expected Operations to Implement / Document
 
 - Search and read:
