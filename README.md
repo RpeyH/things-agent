@@ -236,7 +236,7 @@ Reordering notes:
 - `reorder-area-items` can reorder projects relative to projects and tasks relative to tasks, but live testing shows Things still keeps projects before tasks inside an area.
 - No stable public backend is available yet for checklist-item reorder, heading reorder, or sidebar area reorder.
 
-## Known Limits
+## Known limits
 
 - `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things backend rather than a stable public API.
 - `reorder-area-items` cannot freely interleave projects and tasks inside an area; live testing shows Things still keeps projects before tasks.

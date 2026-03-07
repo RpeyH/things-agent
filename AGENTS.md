@@ -99,7 +99,7 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent url version` | Things URL Scheme `version` | no | URL scheme info |
 | `things-agent url json --data '<json-array>'` | Things URL Scheme `json` | yes | Official top-level JSON array; token required when any item uses `operation:update` |
 
-## Known Limits
+## Known limits
 
 - `reorder-project-items` and `reorder-area-items` rely on a private/experimental Things AppleScript backend, not a stable public API.
 - Live validation shows `reorder-area-items` cannot freely interleave projects and tasks: Things still keeps projects before tasks inside an area.
