@@ -18,6 +18,17 @@ func scriptResolveItemRef(taskName, taskID string) string {
 		return fmt.Sprintf(`  try
     set projectMatches to every project whose id is "%s"
     set taskMatches to every to do whose id is "%s"
+    if (count of taskMatches) is 0 then
+      try
+        set taskMatches to every to do of list "Archive" whose id is "%s"
+      on error
+        try
+          set taskMatches to every to do of list "Logbook" whose id is "%s"
+        on error
+          set taskMatches to {}
+        end try
+      end try
+    end if
     set projectCount to count of projectMatches
     set taskCount to count of taskMatches
     set totalCount to projectCount + taskCount
@@ -31,11 +42,22 @@ func scriptResolveItemRef(taskName, taskID string) string {
   on error errMsg
     error errMsg
   end try
-`, taskID, taskID)
+`, taskID, taskID, taskID, taskID)
 	}
 	return fmt.Sprintf(`  try
     set projectMatches to every project whose name is "%s"
     set taskMatches to every to do whose name is "%s"
+    if (count of taskMatches) is 0 then
+      try
+        set taskMatches to every to do of list "Archive" whose name is "%s"
+      on error
+        try
+          set taskMatches to every to do of list "Logbook" whose name is "%s"
+        on error
+          set taskMatches to {}
+        end try
+      end try
+    end if
     set projectCount to count of projectMatches
     set taskCount to count of taskMatches
     set totalCount to projectCount + taskCount
@@ -49,7 +71,7 @@ func scriptResolveItemRef(taskName, taskID string) string {
   on error errMsg
     error errMsg
   end try
-`, taskName, taskName)
+`, taskName, taskName, taskName, taskName)
 }
 
 func scriptResolveTaskRef(taskName, taskID string) string {
@@ -58,16 +80,38 @@ func scriptResolveTaskRef(taskName, taskID string) string {
 	if taskID != "" {
 		return fmt.Sprintf(`  try
     set taskMatches to every to do whose id is "%s"
+    if (count of taskMatches) is 0 then
+      try
+        set taskMatches to every to do of list "Archive" whose id is "%s"
+      on error
+        try
+          set taskMatches to every to do of list "Logbook" whose id is "%s"
+        on error
+          set taskMatches to {}
+        end try
+      end try
+    end if
     if (count of taskMatches) is 0 then error "No task found with this id."
     if (count of taskMatches) is greater than 1 then error "Ambiguous task id; use a unique id."
     set t to item 1 of taskMatches
   on error errMsg
     error errMsg
   end try
-`, taskID)
+`, taskID, taskID, taskID)
 	}
 	return fmt.Sprintf(`  try
     set taskMatches to every to do whose name is "%s"
+    if (count of taskMatches) is 0 then
+      try
+        set taskMatches to every to do of list "Archive" whose name is "%s"
+      on error
+        try
+          set taskMatches to every to do of list "Logbook" whose name is "%s"
+        on error
+          set taskMatches to {}
+        end try
+      end try
+    end if
     set taskCount to count of taskMatches
     if taskCount is 0 then error "No task found with this name."
     if taskCount is greater than 1 then error "Ambiguous task name; use --id."
@@ -75,7 +119,7 @@ func scriptResolveTaskRef(taskName, taskID string) string {
   on error errMsg
     error errMsg
   end try
-`, taskName)
+`, taskName, taskName, taskName)
 }
 
 func scriptResolveTaskByName(taskName string) string {

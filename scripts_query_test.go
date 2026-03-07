@@ -88,14 +88,14 @@ func TestScriptResolveItemByID(t *testing.T) {
 	if !strings.Contains(got, `every project whose id is "task-1"`) {
 		t.Fatalf("expected project id lookup, got: %s", got)
 	}
-	if !strings.Contains(got, `every to do whose id is "task-1"`) {
+	if !strings.Contains(got, `every to do whose id is "task-1"`) || !strings.Contains(got, `list "Archive"`) || !strings.Contains(got, `list "Logbook"`) {
 		t.Fatalf("expected task id lookup, got: %s", got)
 	}
 }
 
 func TestScriptResolveTaskByID(t *testing.T) {
 	got := scriptResolveTaskByID("task-1")
-	if !strings.Contains(got, `every to do whose id is "task-1"`) || !strings.Contains(got, `No task found with this id.`) {
+	if !strings.Contains(got, `every to do whose id is "task-1"`) || !strings.Contains(got, `list "Archive"`) || !strings.Contains(got, `list "Logbook"`) || !strings.Contains(got, `No task found with this id.`) {
 		t.Fatalf("expected task id lookup, got: %s", got)
 	}
 }
