@@ -12,13 +12,13 @@ import (
 )
 
 type fakeAppController struct {
-	mu           sync.Mutex
-	running      []bool
+	mu            sync.Mutex
+	running       []bool
 	quitCalls     int
 	activateCalls int
-	quitErr      error
-	activateErr  error
-	runningErr   error
+	quitErr       error
+	activateErr   error
+	runningErr    error
 }
 
 func (f *fakeAppController) IsRunning(_ context.Context, _ string) (bool, error) {

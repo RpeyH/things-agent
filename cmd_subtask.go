@@ -10,8 +10,8 @@ import (
 func newListSubtasksCmd() *cobra.Command {
 	var taskName, taskID string
 	cmd := &cobra.Command{
-		Use:   "list-subtasks",
-		Short: "List task subtasks",
+		Use:   "list-checklist-items",
+		Short: "List checklist items for a task",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -33,7 +33,7 @@ func newListSubtasksCmd() *cobra.Command {
 func newAddSubtaskCmd() *cobra.Command {
 	var taskName, taskID, subtaskName string
 	cmd := &cobra.Command{
-		Use:   "add-subtask",
+		Use:   "add-checklist-item",
 		Short: "Add a native checklist item to a task",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -61,7 +61,7 @@ func newAddSubtaskCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Subtask name")
+	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }
@@ -70,8 +70,8 @@ func newEditSubtaskCmd() *cobra.Command {
 	var taskName, taskID, subtaskName, newName, notes string
 	var subtaskIndex int
 	cmd := &cobra.Command{
-		Use:   "edit-subtask",
-		Short: "Edit a subtask",
+		Use:   "edit-checklist-item",
+		Short: "Edit a checklist item",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -99,8 +99,8 @@ func newEditSubtaskCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Target subtask name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Target subtask index (1-based)")
+	cmd.Flags().StringVar(&subtaskName, "name", "", "Target checklist item name")
+	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Target checklist item index (1-based)")
 	cmd.Flags().StringVar(&newName, "new-name", "", "New name")
 	cmd.Flags().StringVar(&notes, "notes", "", "New notes")
 	return cmd
@@ -110,8 +110,8 @@ func newDeleteSubtaskCmd() *cobra.Command {
 	var taskName, taskID, subtaskName string
 	var subtaskIndex int
 	cmd := &cobra.Command{
-		Use:   "delete-subtask",
-		Short: "Delete a subtask",
+		Use:   "delete-checklist-item",
+		Short: "Delete a checklist item",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -134,8 +134,8 @@ func newDeleteSubtaskCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Subtask name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Subtask index (1-based)")
+	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
+	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
 	return cmd
 }
 
@@ -143,8 +143,8 @@ func newCompleteSubtaskCmd() *cobra.Command {
 	var taskName, taskID, subtaskName string
 	var subtaskIndex int
 	cmd := &cobra.Command{
-		Use:   "complete-subtask",
-		Short: "Mark subtask as completed",
+		Use:   "complete-checklist-item",
+		Short: "Mark checklist item as completed",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -167,8 +167,8 @@ func newCompleteSubtaskCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Subtask name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Subtask index (1-based)")
+	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
+	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
 	return cmd
 }
 
@@ -176,8 +176,8 @@ func newUncompleteSubtaskCmd() *cobra.Command {
 	var taskName, taskID, subtaskName string
 	var subtaskIndex int
 	cmd := &cobra.Command{
-		Use:   "uncomplete-subtask",
-		Short: "Mark subtask as uncompleted",
+		Use:   "uncomplete-checklist-item",
+		Short: "Mark checklist item as uncompleted",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
@@ -200,7 +200,7 @@ func newUncompleteSubtaskCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Subtask name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Subtask index (1-based)")
+	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
+	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
 	return cmd
 }

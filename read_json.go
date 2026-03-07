@@ -9,21 +9,21 @@ import (
 )
 
 type readItem struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Type      string            `json:"type"`
-	Status    string            `json:"status"`
-	Scope     string            `json:"scope,omitempty"`
-	Due       string            `json:"due,omitempty"`
-	Deadline  string            `json:"deadline,omitempty"`
-	Created   string            `json:"created,omitempty"`
-	Completed string            `json:"completed,omitempty"`
-	Tags      []string          `json:"tags,omitempty"`
-	Notes     string            `json:"notes,omitempty"`
-	Subtasks  []readSubtaskItem `json:"subtasks,omitempty"`
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Type           string              `json:"type"`
+	Status         string              `json:"status"`
+	Scope          string              `json:"scope,omitempty"`
+	Due            string              `json:"due,omitempty"`
+	Deadline       string              `json:"deadline,omitempty"`
+	Created        string              `json:"created,omitempty"`
+	Completed      string              `json:"completed,omitempty"`
+	Tags           []string            `json:"tags,omitempty"`
+	Notes          string              `json:"notes,omitempty"`
+	ChecklistItems []readChecklistItem `json:"checklist_items,omitempty"`
 }
 
-type readSubtaskItem struct {
+type readChecklistItem struct {
 	Index  int    `json:"index"`
 	Name   string `json:"name"`
 	Status string `json:"status"`
@@ -111,7 +111,7 @@ func parseShowTaskOutput(raw string) (readItem, error) {
 	item := readItem{}
 	noteLines := []string{}
 	inNotes := false
-	inSubtasks := false
+	inChecklistItems := false
 
 	for _, line := range lines {
 		switch {
@@ -141,15 +141,15 @@ func parseShowTaskOutput(raw string) (readItem, error) {
 			inNotes = false
 		case strings.HasPrefix(line, "Notes: "):
 			inNotes = true
-			inSubtasks = false
+			inChecklistItems = false
 			noteLines = []string{strings.TrimPrefix(line, "Notes: ")}
-		case line == "Subtasks:":
+		case line == "Checklist Items:":
 			inNotes = false
-			inSubtasks = true
-		case inSubtasks:
-			subtask, ok := parseSubtaskLine(line)
+			inChecklistItems = true
+		case inChecklistItems:
+			checklistItem, ok := parseChecklistItemLine(line)
 			if ok {
-				item.Subtasks = append(item.Subtasks, subtask)
+				item.ChecklistItems = append(item.ChecklistItems, checklistItem)
 			}
 		case inNotes:
 			noteLines = append(noteLines, line)
@@ -171,10 +171,10 @@ func parseShowTaskJSON(raw string) (any, error) {
 	return item, nil
 }
 
-func parseSubtaskLine(line string) (readSubtaskItem, bool) {
-	var item readSubtaskItem
+func parseChecklistItemLine(line string) (readChecklistItem, bool) {
+	var item readChecklistItem
 	line = strings.TrimSpace(line)
-	if line == "" || line == "No subtasks" || line == "Subtasks: not supported" {
+	if line == "" || line == "No checklist items" || line == "Checklist Items: not supported" {
 		return item, false
 	}
 
@@ -196,15 +196,15 @@ func parseSubtaskLine(line string) (readSubtaskItem, bool) {
 	index := 0
 	for _, ch := range indexText {
 		if ch < '0' || ch > '9' {
-			return readSubtaskItem{}, false
+			return readChecklistItem{}, false
 		}
 		index = index*10 + int(ch-'0')
 	}
 	if index <= 0 || nameText == "" {
-		return readSubtaskItem{}, false
+		return readChecklistItem{}, false
 	}
 
-	item = readSubtaskItem{
+	item = readChecklistItem{
 		Index:  index,
 		Name:   nameText,
 		Status: statusText,

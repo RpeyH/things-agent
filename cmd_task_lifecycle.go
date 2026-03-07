@@ -62,7 +62,7 @@ func resolveTaskParentSelector(taskName, taskID string) (string, string, error) 
 
 func newShowTaskCmd() *cobra.Command {
 	var name, id string
-	var withSubtasks bool
+	var withChecklistItems bool
 	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "show-task",
@@ -78,20 +78,20 @@ func newShowTaskCmd() *cobra.Command {
 				return err
 			}
 			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withSubtasks), parseShowTaskJSON)
+				return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChecklistItems), parseShowTaskJSON)
 			}
-			return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withSubtasks))
+			return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChecklistItems))
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Task or project name")
 	cmd.Flags().StringVar(&id, "id", "", "Task or project ID")
-	cmd.Flags().BoolVar(&withSubtasks, "with-subtasks", true, "Include subtasks")
+	cmd.Flags().BoolVar(&withChecklistItems, "with-checklist-items", true, "Include checklist items")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
 	return cmd
 }
 
 func newAddTaskCmd() *cobra.Command {
-	var name, notes, tags, areaName, projectName, due, subtasks string
+	var name, notes, tags, areaName, projectName, due, checklistItems string
 	cmd := &cobra.Command{
 		Use:   "add-task",
 		Short: "Add a task",
@@ -115,7 +115,7 @@ func newAddTaskCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			subtasksList := parseCSVList(subtasks)
+			checklistItemsList := parseCSVList(checklistItems)
 			var createScript string
 			switch destinationKind {
 			case "area":
@@ -133,12 +133,12 @@ func newAddTaskCmd() *cobra.Command {
 			if taskID == "" {
 				return errors.New("could not retrieve created task id")
 			}
-			if len(subtasksList) > 0 {
+			if len(checklistItemsList) > 0 {
 				token, err := requireAuthToken(cfg)
 				if err != nil {
 					return err
 				}
-				if _, err := cfg.runner.run(ctx, scriptSetChecklistByID(cfg.bundleID, taskID, subtasksList, token)); err != nil {
+				if _, err := cfg.runner.run(ctx, scriptSetChecklistByID(cfg.bundleID, taskID, checklistItemsList, token)); err != nil {
 					return err
 				}
 			}
@@ -152,7 +152,7 @@ func newAddTaskCmd() *cobra.Command {
 	cmd.Flags().StringVar(&areaName, "area", "", "Destination area")
 	cmd.Flags().StringVar(&projectName, "project", "", "Destination project")
 	cmd.Flags().StringVar(&due, "due", "", "Due date (YYYY-MM-DD [HH:mm[:ss]])")
-	cmd.Flags().StringVar(&subtasks, "subtasks", "", "Subtasks (name1, name2, ...)")
+	cmd.Flags().StringVar(&checklistItems, "checklist-items", "", "Checklist items (name1, name2, ...)")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }

@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	restorePollInterval    = 200 * time.Millisecond
-	restoreStopTimeout     = 5 * time.Second
-	restoreStabilityTimeout = 2 * time.Second
-	restoreStablePasses    = 2
+	restorePollInterval       = 200 * time.Millisecond
+	restoreStopTimeout        = 5 * time.Second
+	restoreStabilityTimeout   = 2 * time.Second
+	restoreStablePasses       = 2
 	restoreQuiesceGracePeriod = 300 * time.Millisecond
 )
 
@@ -60,17 +60,17 @@ func (c scriptAppController) Activate(ctx context.Context, bundleID string) erro
 }
 
 type restoreExecutor struct {
-	backups          *backupManager
-	bundleID         string
-	app              appController
-	sleep            func(time.Duration)
-	pollInterval     time.Duration
-	stopTimeout      time.Duration
-	stabilityTimeout time.Duration
-	stablePasses     int
+	backups            *backupManager
+	bundleID           string
+	app                appController
+	sleep              func(time.Duration)
+	pollInterval       time.Duration
+	stopTimeout        time.Duration
+	stabilityTimeout   time.Duration
+	stablePasses       int
 	quiesceGracePeriod time.Duration
-	captureFileState func(string) ([]liveFileState, error)
-	semanticCheck    func(context.Context) (restoreSemanticVerification, error)
+	captureFileState   func(string) ([]liveFileState, error)
+	semanticCheck      func(context.Context) (restoreSemanticVerification, error)
 }
 
 type restorePreflightReport struct {
@@ -119,40 +119,40 @@ type restoreJournalStep struct {
 }
 
 type restoreJournal struct {
-	RequestedTimestamp string                    `json:"requested_timestamp,omitempty"`
-	Timestamp          string                    `json:"timestamp"`
-	DryRun             bool                      `json:"dry_run"`
-	Outcome            string                    `json:"outcome"`
-	AppWasRunning      bool                      `json:"app_was_running"`
-	Preflight          restorePreflightReport    `json:"preflight"`
-	PreRestoreBackup   *restoreBackupRecord      `json:"pre_restore_backup,omitempty"`
-	RestoredFiles      []string                  `json:"restored_files,omitempty"`
-	Verification       *restoreVerificationReport `json:"verification,omitempty"`
+	RequestedTimestamp   string                       `json:"requested_timestamp,omitempty"`
+	Timestamp            string                       `json:"timestamp"`
+	DryRun               bool                         `json:"dry_run"`
+	Outcome              string                       `json:"outcome"`
+	AppWasRunning        bool                         `json:"app_was_running"`
+	Preflight            restorePreflightReport       `json:"preflight"`
+	PreRestoreBackup     *restoreBackupRecord         `json:"pre_restore_backup,omitempty"`
+	RestoredFiles        []string                     `json:"restored_files,omitempty"`
+	Verification         *restoreVerificationReport   `json:"verification,omitempty"`
 	SemanticVerification *restoreSemanticVerification `json:"semantic_verification,omitempty"`
-	Rollback           *restoreRollbackReport    `json:"rollback,omitempty"`
-	Steps              []restoreJournalStep      `json:"steps"`
+	Rollback             *restoreRollbackReport       `json:"rollback,omitempty"`
+	Steps                []restoreJournalStep         `json:"steps"`
 }
 
 type restoreSemanticVerification struct {
-	OK               bool `json:"ok"`
-	Lists            int  `json:"lists"`
-	Projects         int  `json:"projects"`
-	TemporaryLaunch  bool `json:"temporary_launch,omitempty"`
+	OK              bool `json:"ok"`
+	Lists           int  `json:"lists"`
+	Projects        int  `json:"projects"`
+	TemporaryLaunch bool `json:"temporary_launch,omitempty"`
 }
 
 func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 	return &restoreExecutor{
-		backups:          newBackupManager(cfg.dataDir),
-		bundleID:         cfg.bundleID,
-		app:              scriptAppController{runner: cfg.runner},
-		sleep:            time.Sleep,
-		pollInterval:     restorePollInterval,
-		stopTimeout:      restoreStopTimeout,
-		stabilityTimeout: restoreStabilityTimeout,
-		stablePasses:     restoreStablePasses,
+		backups:            newBackupManager(cfg.dataDir),
+		bundleID:           cfg.bundleID,
+		app:                scriptAppController{runner: cfg.runner},
+		sleep:              time.Sleep,
+		pollInterval:       restorePollInterval,
+		stopTimeout:        restoreStopTimeout,
+		stabilityTimeout:   restoreStabilityTimeout,
+		stablePasses:       restoreStablePasses,
 		quiesceGracePeriod: restoreQuiesceGracePeriod,
-		captureFileState: captureLiveFileState,
-		semanticCheck:    newScriptSemanticVerifier(cfg.bundleID, cfg.runner).Check,
+		captureFileState:   captureLiveFileState,
+		semanticCheck:      newScriptSemanticVerifier(cfg.bundleID, cfg.runner).Check,
 	}
 }
 

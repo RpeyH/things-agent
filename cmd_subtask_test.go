@@ -13,49 +13,49 @@ func TestSubtaskCommands(t *testing.T) {
 		list := newListSubtasksCmd()
 		list.SetArgs([]string{"--task", "task-a"})
 		if err := list.Execute(); err != nil {
-			t.Fatalf("list-subtasks failed: %v", err)
+			t.Fatalf("list-checklist-items failed: %v", err)
 		}
 
 		add := newAddSubtaskCmd()
 		add.SetArgs([]string{"--task", "task-a", "--name", "sub-a"})
 		if err := add.Execute(); err != nil {
-			t.Fatalf("add-subtask failed: %v", err)
+			t.Fatalf("add-checklist-item failed: %v", err)
 		}
 
 		edit := newEditSubtaskCmd()
 		edit.SetArgs([]string{"--task", "task-a", "--name", "sub-a", "--new-name", "sub-b", "--notes", "n"})
 		if err := edit.Execute(); err != nil {
-			t.Fatalf("edit-subtask failed: %v", err)
+			t.Fatalf("edit-checklist-item failed: %v", err)
 		}
 
 		complete := newCompleteSubtaskCmd()
 		complete.SetArgs([]string{"--task", "task-a", "--name", "sub-b"})
 		if err := complete.Execute(); err != nil {
-			t.Fatalf("complete-subtask failed: %v", err)
+			t.Fatalf("complete-checklist-item failed: %v", err)
 		}
 
 		uncomplete := newUncompleteSubtaskCmd()
 		uncomplete.SetArgs([]string{"--task", "task-a", "--name", "sub-b"})
 		if err := uncomplete.Execute(); err != nil {
-			t.Fatalf("uncomplete-subtask failed: %v", err)
+			t.Fatalf("uncomplete-checklist-item failed: %v", err)
 		}
 
 		del := newDeleteSubtaskCmd()
 		del.SetArgs([]string{"--task", "task-a", "--name", "sub-b"})
 		if err := del.Execute(); err != nil {
-			t.Fatalf("delete-subtask failed: %v", err)
+			t.Fatalf("delete-checklist-item failed: %v", err)
 		}
 
 		completeByIndex := newCompleteSubtaskCmd()
 		completeByIndex.SetArgs([]string{"--task", "task-a", "--index", "1"})
 		if err := completeByIndex.Execute(); err != nil {
-			t.Fatalf("complete-subtask --index failed: %v", err)
+			t.Fatalf("complete-checklist-item --index failed: %v", err)
 		}
 
 		uncompleteByIndex := newUncompleteSubtaskCmd()
 		uncompleteByIndex.SetArgs([]string{"--task", "task-a", "--index", "1"})
 		if err := uncompleteByIndex.Execute(); err != nil {
-			t.Fatalf("uncomplete-subtask --index failed: %v", err)
+			t.Fatalf("uncomplete-checklist-item --index failed: %v", err)
 		}
 
 		if got := len(fr.allScripts()); got < 6 {
@@ -70,13 +70,13 @@ func TestSubtaskCommands(t *testing.T) {
 		add := newAddSubtaskCmd()
 		add.SetArgs([]string{"--task-id", "task-1", "--name", "sub-a"})
 		if err := add.Execute(); err != nil {
-			t.Fatalf("add-subtask --task-id failed: %v", err)
+			t.Fatalf("add-checklist-item --task-id failed: %v", err)
 		}
 
 		list := newListSubtasksCmd()
 		list.SetArgs([]string{"--task-id", "task-1"})
 		if err := list.Execute(); err != nil {
-			t.Fatalf("list-subtasks --task-id failed: %v", err)
+			t.Fatalf("list-checklist-items --task-id failed: %v", err)
 		}
 
 		scripts := strings.Join(fr.allScripts(), "\n")

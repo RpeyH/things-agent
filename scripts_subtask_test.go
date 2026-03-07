@@ -19,11 +19,11 @@ func TestScriptSubtaskListingAndShow(t *testing.T) {
 
 	showWith := scriptShowTask("bundle.id", "task", "", true)
 	if !strings.Contains(showWith, "if true then") {
-		t.Fatalf("expected subtasks block enabled: %s", showWith)
+		t.Fatalf("expected checklist block enabled: %s", showWith)
 	}
 	showWithout := scriptShowTask("bundle.id", "task", "", false)
 	if !strings.Contains(showWithout, "if false then") {
-		t.Fatalf("expected subtasks block disabled: %s", showWithout)
+		t.Fatalf("expected checklist block disabled: %s", showWithout)
 	}
 }
 

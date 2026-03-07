@@ -77,7 +77,7 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			return executeAcceptanceRoot(t,
 				"add-task",
 				"--name", "task-a",
-				"--subtasks", `"one, first","two"`,
+				"--checklist-items", `"one, first","two"`,
 			)
 		})
 		if err != nil {
@@ -181,15 +181,15 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 	})
 
-	t.Run("list-subtasks surfaces backend status markers", func(t *testing.T) {
+	t.Run("list-checklist-items surfaces backend status markers", func(t *testing.T) {
 		fr := &fakeRunner{output: "status:unsupported\ncode:-1708\nmessage:event not handled"}
 		setupTestRuntime(t, t.TempDir(), fr)
 
 		stdout, err := captureStdout(t, func() error {
-			return executeAcceptanceRoot(t, "list-subtasks", "--task", "task-a")
+			return executeAcceptanceRoot(t, "list-checklist-items", "--task", "task-a")
 		})
 		if err != nil {
-			t.Fatalf("expected list-subtasks to surface backend marker instead of failing silently: %v", err)
+			t.Fatalf("expected list-checklist-items to surface backend marker instead of failing silently: %v", err)
 		}
 		if !strings.Contains(stdout, "status:unsupported") || !strings.Contains(stdout, "message:event not handled") {
 			t.Fatalf("expected backend status markers on stdout, got %q", stdout)
@@ -220,7 +220,7 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			}
 		})
 
-		t.Run("show-task json preserves notes and subtasks", func(t *testing.T) {
+		t.Run("show-task json preserves notes and checklist_items", func(t *testing.T) {
 			fr := &fakeRunner{output: strings.Join([]string{
 				"ID: task-1",
 				"Name: Task A",
@@ -232,7 +232,7 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 				"Tags: alpha, beta",
 				"Notes: line one",
 				"line two",
-				"Subtasks:",
+				"Checklist Items:",
 				"1. Review [open] | note-a",
 				"2. Ship [completed]",
 			}, "\n")}
@@ -255,9 +255,9 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			if item["notes"] != "line one\nline two" {
 				t.Fatalf("expected multiline notes, got %#v", item["notes"])
 			}
-			subtasks, ok := item["subtasks"].([]any)
-			if !ok || len(subtasks) != 2 {
-				t.Fatalf("expected two subtasks, got %#v", item["subtasks"])
+			checklist_items, ok := item["checklist_items"].([]any)
+			if !ok || len(checklist_items) != 2 {
+				t.Fatalf("expected two checklist_items, got %#v", item["checklist_items"])
 			}
 		})
 	})
@@ -277,18 +277,38 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 	})
 
-	t.Run("subtask commands support task-id selector", func(t *testing.T) {
+	t.Run("checklist item commands support task-id selector", func(t *testing.T) {
 		fr := &fakeRunner{output: "task-1"}
 		setupTestRuntimeWithDB(t, fr)
 
-		err := executeAcceptanceRoot(t, "add-subtask", "--task-id", "task-1", "--name", "Checklist item")
+		err := executeAcceptanceRoot(t, "add-checklist-item", "--task-id", "task-1", "--name", "Checklist item")
 		if err != nil {
-			t.Fatalf("expected add-subtask --task-id to succeed: %v", err)
+			t.Fatalf("expected add-checklist-item --task-id to succeed: %v", err)
 		}
 
 		scripts := fr.allScripts()
 		if len(scripts) == 0 || !strings.Contains(scripts[len(scripts)-1], `first «class tstk» whose id is "task-1"`) {
 			t.Fatalf("expected task-id based checklist mutation, got %#v", scripts)
+		}
+	})
+
+	t.Run("legacy subtask surface is rejected", func(t *testing.T) {
+		fr := &fakeRunner{output: "task-1"}
+		setupTestRuntimeWithDB(t, fr)
+
+		err := executeAcceptanceRoot(t, "add-subtask", "--task-id", "task-1", "--name", "Checklist item")
+		if err == nil || !strings.Contains(err.Error(), "unknown command") {
+			t.Fatalf("expected add-subtask legacy command to be rejected, got %v", err)
+		}
+
+		err = executeAcceptanceRoot(t, "add-task", "--name", "task-a", "--area", "Inbox", "--subtasks", "one,two")
+		if err == nil || !strings.Contains(err.Error(), "unknown flag: --subtasks") {
+			t.Fatalf("expected legacy --subtasks flag to be rejected, got %v", err)
+		}
+
+		err = executeAcceptanceRoot(t, "show-task", "--name", "task-a", "--with-subtasks=false")
+		if err == nil || !strings.Contains(err.Error(), "unknown flag: --with-subtasks") {
+			t.Fatalf("expected legacy --with-subtasks flag to be rejected, got %v", err)
 		}
 	})
 

@@ -40,7 +40,7 @@ func scriptAddSubtask(bundleID, taskName, taskID, subtaskName, notes string) str
 	}
 	script += `  return id of s
   on error
-    error "Cannot add a subtask to this item."
+    error "Cannot add a checklist item to this task."
   end try
 end tell`
 	return script
@@ -59,15 +59,15 @@ func scriptFindSubtask(bundleID, taskName, taskID, subtaskName string, index int
 %s  try
     set s to %s
   on error
-    error "No subtask found on this item."
+    error "No checklist item found on this task."
   end try
 `, bundleID, scriptResolveTaskRef(taskName, taskID), target)
 }
 
-func scriptShowTask(bundleID, taskName, taskID string, withSubtasks bool) string {
-	subtasksBlock := "false"
-	if withSubtasks {
-		subtasksBlock = "true"
+func scriptShowTask(bundleID, taskName, taskID string, withChecklistItems bool) string {
+	checklistItemsBlock := "false"
+	if withChecklistItems {
+		checklistItemsBlock = "true"
 	}
 	return fmt.Sprintf(`tell application id "%s"
 %s  set out to "ID: " & (id of t)
@@ -109,30 +109,30 @@ func scriptShowTask(bundleID, taskName, taskID string, withSubtasks bool) string
   end if
   if %s then
     try
-      set subtasks to to dos of t
-      set subtaskLines to "No subtasks"
-      if (count subtasks) > 0 then
-        set subtaskLines to ""
-        repeat with i from 1 to count subtasks
-          set s to item i of subtasks
+      set checklistItems to to dos of t
+      set checklistLines to "No checklist items"
+      if (count checklistItems) > 0 then
+        set checklistLines to ""
+        repeat with i from 1 to count checklistItems
+          set s to item i of checklistItems
           set lineItem to (i as string) & ". " & (name of s) & " [" & (status of s as string) & "]"
           if (notes of s is not missing value) and (notes of s is not "") then
             set lineItem to lineItem & " | " & (notes of s)
           end if
-          if subtaskLines is "" then
-            set subtaskLines to lineItem
+          if checklistLines is "" then
+            set checklistLines to lineItem
           else
-            set subtaskLines to subtaskLines & linefeed & lineItem
+            set checklistLines to checklistLines & linefeed & lineItem
           end if
         end repeat
       end if
-      set out to out & linefeed & "Subtasks:" & linefeed & subtaskLines
+      set out to out & linefeed & "Checklist Items:" & linefeed & checklistLines
     on error
-      set out to out & linefeed & "Subtasks: not supported"
+      set out to out & linefeed & "Checklist Items: not supported"
     end try
   end if
   return out
-end tell`, bundleID, scriptResolveItemRef(taskName, taskID), subtasksBlock)
+end tell`, bundleID, scriptResolveItemRef(taskName, taskID), checklistItemsBlock)
 }
 
 func scriptEditSubtask(bundleID, taskName, taskID, subtaskName string, index int, newName, notes string) string {
