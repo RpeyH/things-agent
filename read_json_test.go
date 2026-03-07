@@ -39,6 +39,7 @@ func TestParseShowTaskOutput(t *testing.T) {
 		"Tags: alpha, beta",
 		"Notes: line one",
 		"line two",
+		"Checklist Items: unsupported via AppleScript",
 		"Child Tasks:",
 		"1. Review [open] | note-a",
 		"2. Ship [completed]",
@@ -57,6 +58,9 @@ func TestParseShowTaskOutput(t *testing.T) {
 	if len(item.Tags) != 2 || item.Tags[0] != "alpha" || item.Tags[1] != "beta" {
 		t.Fatalf("unexpected tags: %#v", item.Tags)
 	}
+	if item.ChecklistItemsSupported {
+		t.Fatalf("expected checklist read to be explicitly unsupported, got %#v", item)
+	}
 	if len(item.ChildTasks) != 2 || item.ChildTasks[0].Name != "Review" || item.ChildTasks[1].Status != "completed" {
 		t.Fatalf("unexpected child_tasks: %#v", item.ChildTasks)
 	}
@@ -73,6 +77,7 @@ func TestParseShowTaskOutputIgnoresChildTaskUnsupportedInNotes(t *testing.T) {
 		"Created on: 2026-03-01 00:00:00",
 		"Tags: solo",
 		"Notes: line one",
+		"Checklist Items: unsupported via AppleScript",
 		"Child Tasks: not supported",
 	}, "\n")
 
@@ -85,6 +90,9 @@ func TestParseShowTaskOutputIgnoresChildTaskUnsupportedInNotes(t *testing.T) {
 	}
 	if len(item.Tags) != 1 || item.Tags[0] != "solo" {
 		t.Fatalf("unexpected single tag parsing: %#v", item.Tags)
+	}
+	if item.ChecklistItemsSupported {
+		t.Fatalf("expected checklist read to stay unsupported, got %#v", item)
 	}
 }
 

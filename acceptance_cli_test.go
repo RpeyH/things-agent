@@ -254,6 +254,7 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 				"Tags: alpha, beta",
 				"Notes: line one",
 				"line two",
+				"Checklist Items: unsupported via AppleScript",
 				"Child Tasks:",
 				"1. Review [open] | note-a",
 				"2. Ship [completed]",
@@ -276,6 +277,9 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 			}
 			if item["notes"] != "line one\nline two" {
 				t.Fatalf("expected multiline notes, got %#v", item["notes"])
+			}
+			if item["checklist_items_supported"] != false {
+				t.Fatalf("expected explicit unsupported checklist read marker, got %#v", item["checklist_items_supported"])
 			}
 			childTasks, ok := item["child_tasks"].([]any)
 			if !ok || len(childTasks) != 2 {

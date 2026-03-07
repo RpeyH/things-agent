@@ -9,18 +9,19 @@ import (
 )
 
 type readItem struct {
-	ID         string              `json:"id"`
-	Name       string              `json:"name"`
-	Type       string              `json:"type"`
-	Status     string              `json:"status"`
-	Scope      string              `json:"scope,omitempty"`
-	Due        string              `json:"due,omitempty"`
-	Deadline   string              `json:"deadline,omitempty"`
-	Created    string              `json:"created,omitempty"`
-	Completed  string              `json:"completed,omitempty"`
-	Tags       []string            `json:"tags,omitempty"`
-	Notes      string              `json:"notes,omitempty"`
-	ChildTasks []readChildTaskItem `json:"child_tasks,omitempty"`
+	ID                      string              `json:"id"`
+	Name                    string              `json:"name"`
+	Type                    string              `json:"type"`
+	Status                  string              `json:"status"`
+	Scope                   string              `json:"scope,omitempty"`
+	Due                     string              `json:"due,omitempty"`
+	Deadline                string              `json:"deadline,omitempty"`
+	Created                 string              `json:"created,omitempty"`
+	Completed               string              `json:"completed,omitempty"`
+	Tags                    []string            `json:"tags,omitempty"`
+	Notes                   string              `json:"notes,omitempty"`
+	ChecklistItemsSupported bool                `json:"checklist_items_supported"`
+	ChildTasks              []readChildTaskItem `json:"child_tasks,omitempty"`
 }
 
 type readChildTaskItem struct {
@@ -146,6 +147,10 @@ func parseShowTaskOutput(raw string) (readItem, error) {
 			inNotes = true
 			inChildTasks = false
 			noteLines = []string{strings.TrimPrefix(line, "Notes: ")}
+		case strings.HasPrefix(line, "Checklist Items: "):
+			inNotes = false
+			inChildTasks = false
+			item.ChecklistItemsSupported = !strings.Contains(strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "Checklist Items: "))), "unsupported")
 		case strings.HasPrefix(line, "Child Tasks:"):
 			inNotes = false
 			if line == "Child Tasks:" {

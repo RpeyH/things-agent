@@ -126,6 +126,7 @@ func scriptShowTask(bundleID, taskName, taskID string, withChildTasks bool) stri
   else
     set out to out & linefeed & "Notes: " & (notes of t)
   end if
+  set out to out & linefeed & "Checklist Items: unsupported via AppleScript"
   if %s then
     try
       set childTasks to to dos of t
