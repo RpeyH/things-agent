@@ -28,7 +28,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 			"--name", "task-a",
 			"--notes", "note",
 			"--tags", "a,b",
-			"--list", "Inbox",
+			"--area", "Inbox",
 			"--due", "2026-03-06",
 			"--subtasks", "one,two",
 		})
@@ -51,7 +51,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: "task-id-1"}
 		setupTestRuntimeWithDB(t, fr)
 		cmd := newAddTaskCmd()
-		cmd.SetArgs([]string{"--name", "task-a", "--list", "Inbox", "--due", "not-a-date"})
+		cmd.SetArgs([]string{"--name", "task-a", "--area", "Inbox", "--due", "not-a-date"})
 		err := cmd.Execute()
 		if err == nil {
 			t.Fatal("expected date parse error")
@@ -62,7 +62,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: ""}
 		setupTestRuntimeWithDB(t, fr)
 		cmd := newAddTaskCmd()
-		cmd.SetArgs([]string{"--name", "task-a", "--list", "Inbox"})
+		cmd.SetArgs([]string{"--name", "task-a", "--area", "Inbox"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "could not retrieve created task id") {
 			t.Fatalf("unexpected error: %v", err)
@@ -78,6 +78,17 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		cmd.SetArgs([]string{"--name", "task-a"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "destination is required") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("add task rejects mixed destinations", func(t *testing.T) {
+		fr := &fakeRunner{output: "task-id-1"}
+		setupTestRuntimeWithDB(t, fr)
+		cmd := newAddTaskCmd()
+		cmd.SetArgs([]string{"--name", "task-a", "--area", "Inbox", "--project", "Project A"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "exactly one destination") {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})

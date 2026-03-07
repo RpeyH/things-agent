@@ -16,6 +16,24 @@ func resolveDestinationListName(value string) string {
 	return envOrDefault("THINGS_DEFAULT_LIST", "")
 }
 
+func resolveTaskDestination(areaName, projectName string) (string, string, error) {
+	areaName = strings.TrimSpace(areaName)
+	projectName = strings.TrimSpace(projectName)
+	if areaName != "" && projectName != "" {
+		return "", "", errors.New("exactly one destination is allowed: use --area or --project")
+	}
+	if areaName != "" {
+		return "area", areaName, nil
+	}
+	if projectName != "" {
+		return "project", projectName, nil
+	}
+	if fallback := resolveDestinationListName(""); fallback != "" {
+		return "area", fallback, nil
+	}
+	return "", "", errors.New("destination is required: use --area, --project, or THINGS_DEFAULT_LIST")
+}
+
 func newShowTaskCmd() *cobra.Command {
 	var name string
 	var withSubtasks bool
@@ -47,7 +65,7 @@ func newShowTaskCmd() *cobra.Command {
 }
 
 func newAddTaskCmd() *cobra.Command {
-	var name, notes, tags, listName, due, subtasks string
+	var name, notes, tags, areaName, projectName, due, subtasks string
 	cmd := &cobra.Command{
 		Use:   "add-task",
 		Short: "Add a task",
@@ -60,9 +78,9 @@ func newAddTaskCmd() *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
-			listName = resolveDestinationListName(listName)
-			if listName == "" {
-				return errors.New("destination is required: use --list or THINGS_DEFAULT_LIST")
+			destinationKind, destinationName, err := resolveTaskDestination(areaName, projectName)
+			if err != nil {
+				return err
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
@@ -72,7 +90,16 @@ func newAddTaskCmd() *cobra.Command {
 				return err
 			}
 			subtasksList := parseCSVList(subtasks)
-			out, err := cfg.runner.run(ctx, scriptAddTask(cfg.bundleID, listName, name, notes, tags, dueDate))
+			var createScript string
+			switch destinationKind {
+			case "area":
+				createScript = scriptAddTaskToArea(cfg.bundleID, destinationName, name, notes, tags, dueDate)
+			case "project":
+				createScript = scriptAddTaskToProject(cfg.bundleID, destinationName, name, notes, tags, dueDate)
+			default:
+				return errors.New("unsupported destination kind")
+			}
+			out, err := cfg.runner.run(ctx, createScript)
 			if err != nil {
 				return err
 			}
@@ -96,7 +123,8 @@ func newAddTaskCmd() *cobra.Command {
 	cmd.Flags().StringVar(&name, "name", "", "Task name")
 	cmd.Flags().StringVar(&notes, "notes", "", "Notes")
 	cmd.Flags().StringVar(&tags, "tags", "", "Tags (comma-separated)")
-	cmd.Flags().StringVar(&listName, "list", "", "Destination area")
+	cmd.Flags().StringVar(&areaName, "area", "", "Destination area")
+	cmd.Flags().StringVar(&projectName, "project", "", "Destination project")
 	cmd.Flags().StringVar(&due, "due", "", "Due date (YYYY-MM-DD [HH:mm[:ss]])")
 	cmd.Flags().StringVar(&subtasks, "subtasks", "", "Subtasks (name1, name2, ...)")
 	_ = cmd.MarkFlagRequired("name")

@@ -11,7 +11,7 @@ func TestProjectListCommands(t *testing.T) {
 		setupTestRuntimeWithDB(t, fr)
 
 		addProject := newAddProjectCmd()
-		addProject.SetArgs([]string{"--name", "p1", "--notes", "n", "--list", "Inbox"})
+		addProject.SetArgs([]string{"--name", "p1", "--notes", "n", "--area", "Inbox"})
 		if err := addProject.Execute(); err != nil {
 			t.Fatalf("add-project failed: %v", err)
 		}

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func scriptAddTask(bundleID, listName, name, notes, tags, due string) string {
+func taskPropertyParts(name, notes, tags string) []string {
 	parts := []string{fmt.Sprintf(`name:"%s"`, escapeApple(name))}
 	if strings.TrimSpace(notes) != "" {
 		parts = append(parts, fmt.Sprintf(`notes:"%s"`, escapeApple(notes)))
@@ -17,10 +17,10 @@ func scriptAddTask(bundleID, listName, name, notes, tags, due string) string {
 	if strings.TrimSpace(tags) != "" {
 		parts = append(parts, fmt.Sprintf(`tag names:"%s"`, escapeApple(tags)))
 	}
-	script := fmt.Sprintf(`tell application id "%s"
-  set targetList to first list whose name is "%s"
-  set t to make new «class tstk» at end of to dos of targetList with properties {%s}
-`, bundleID, escapeApple(listName), strings.Join(parts, ", "))
+	return parts
+}
+
+func appendDueDateScript(script, due string) string {
 	if strings.TrimSpace(due) != "" {
 		script += fmt.Sprintf(`  set due date of t to date "%s"
 `, due)
@@ -28,6 +28,24 @@ func scriptAddTask(bundleID, listName, name, notes, tags, due string) string {
 	script += `  return id of t
 end tell`
 	return script
+}
+
+func scriptAddTaskToArea(bundleID, areaName, name, notes, tags, due string) string {
+	parts := taskPropertyParts(name, notes, tags)
+	script := fmt.Sprintf(`tell application id "%s"
+  set targetList to first list whose name is "%s"
+  set t to make new «class tstk» at end of to dos of targetList with properties {%s}
+`, bundleID, escapeApple(areaName), strings.Join(parts, ", "))
+	return appendDueDateScript(script, due)
+}
+
+func scriptAddTaskToProject(bundleID, projectName, name, notes, tags, due string) string {
+	parts := taskPropertyParts(name, notes, tags)
+	script := fmt.Sprintf(`tell application id "%s"
+  set targetProject to first project whose name is "%s"
+  set t to make new «class tstk» at end of to dos of targetProject with properties {%s}
+`, bundleID, escapeApple(projectName), strings.Join(parts, ", "))
+	return appendDueDateScript(script, due)
 }
 
 func requireAuthToken(cfg *runtimeConfig) (string, error) {

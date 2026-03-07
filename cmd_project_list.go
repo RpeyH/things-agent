@@ -9,7 +9,7 @@ import (
 )
 
 func newAddProjectCmd() *cobra.Command {
-	var name, notes, listName string
+	var name, notes, areaName string
 	cmd := &cobra.Command{
 		Use:   "add-project",
 		Short: "Add a project",
@@ -22,19 +22,19 @@ func newAddProjectCmd() *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
-			listName = resolveDestinationListName(listName)
-			if listName == "" {
-				return errors.New("destination is required: use --list or THINGS_DEFAULT_LIST")
+			areaName = resolveDestinationListName(areaName)
+			if areaName == "" {
+				return errors.New("destination is required: use --area or THINGS_DEFAULT_LIST")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptAddProject(cfg.bundleID, strings.TrimSpace(listName), name, notes))
+			return runResult(ctx, cfg, scriptAddProject(cfg.bundleID, strings.TrimSpace(areaName), name, notes))
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Project name")
 	cmd.Flags().StringVar(&notes, "notes", "", "Notes")
-	cmd.Flags().StringVar(&listName, "list", "", "Destination area")
+	cmd.Flags().StringVar(&areaName, "area", "", "Destination area")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }

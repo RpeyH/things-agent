@@ -99,6 +99,22 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 	})
 
+	t.Run("add-task accepts explicit project destination", func(t *testing.T) {
+		fr := &fakeRunner{output: "task-id-1"}
+		setupTestRuntimeWithDB(t, fr)
+		t.Setenv("THINGS_DEFAULT_LIST", "")
+
+		err := executeAcceptanceRoot(t, "add-task", "--name", "task-a", "--project", "Project A")
+		if err != nil {
+			t.Fatalf("expected add-task --project to succeed: %v", err)
+		}
+
+		scripts := fr.allScripts()
+		if len(scripts) == 0 || !strings.Contains(scripts[0], `set targetProject to first project whose name is "Project A"`) {
+			t.Fatalf("expected project destination script, got %#v", scripts)
+		}
+	})
+
 	t.Run("url search allows missing query", func(t *testing.T) {
 		fr := &fakeRunner{output: "ok"}
 		setupTestRuntimeWithDB(t, fr)
