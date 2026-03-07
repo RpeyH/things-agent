@@ -72,7 +72,8 @@ Use this project at your own risk.
 - This is a deliberate safety decision to avoid irreversible bulk deletion by script.
 - Deletion remains available item by item (`delete-task`, `delete-project`, `delete-area`) with backup beforehand.
 - `session-start` backup is required in agent instructions before state-changing operations.
-- Backups are rotated and capped at 50 snapshots (about ~7 MB each on the author's machine).
+- Backups are rotated and capped at 50 snapshots.
+- On the author's machine at the time of writing, the full `backups/` folder uses roughly `316 MB` total; this includes SQLite backup files plus backup metadata, and will vary with database and WAL size.
 - `AGENTS.md` explicitly forbids direct SQLite access.
 - Bypassing CLI constraints through alternative command paths requires explicit user decision and responsibility.
 
