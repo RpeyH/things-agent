@@ -49,15 +49,15 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent backup` | Create backup manually | yes | Safe checkpoint |
 | `things-agent restore [--timestamp <YYYY-MM-DD:HH-MM-SS>]` | Restore a backup | yes | Critical operation; creates a pre-restore backup, quiesces Things, verifies files, rolls back on failure |
 | `things-agent lists` | List Things areas/lists | no | Read operation |
-| `things-agent projects` | List projects | no | Read operation |
+| `things-agent projects [--json]` | List projects | no | Read operation |
 | `things-agent tags list [--query <text>]` | List tags | no | Read operation |
 | `things-agent tags search --query <text>` | Search tags by name | no | Read operation |
 | `things-agent tags add --name <name> [--parent <name>]` | Create a tag | yes | Write operation |
 | `things-agent tags edit --name <name> ...` | Edit a tag name/parent | yes | Write operation |
 | `things-agent tags delete --name <name>` | Delete a tag | yes | Destructive |
-| `things-agent tasks [--list <name>] [--query <text>]` | List tasks with optional filters | no | Read operation |
-| `things-agent search --query <text> [--list <name>]` | Search tasks | no | Read operation |
-| `things-agent show-task --name <name>` | Show full task/project details | no | Includes metadata |
+| `things-agent tasks [--list <name>] [--query <text>] [--json]` | List tasks with optional filters | no | Read operation |
+| `things-agent search --query <text> [--list <name>] [--json]` | Search tasks | no | Read operation |
+| `things-agent show-task --name <name> [--json]` | Show full task/project details | no | Includes metadata |
 | `things-agent add-task ...` | Create a task | yes | Write operation |
 | `things-agent edit-task ...` | Edit a task by name | yes | Write operation |
 | `things-agent delete-task --name <name>` | Delete a task | yes | Destructive |

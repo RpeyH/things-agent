@@ -129,7 +129,11 @@ things-agent session-start
 things-agent session-start
 things-agent backup
 things-agent tasks --list "À classer"
+things-agent tasks --list "À classer" --json
 things-agent search --query "Wagner"
+things-agent search --query "Wagner" --json
+things-agent projects --json
+things-agent show-task --name "Say hello" --json
 things-agent add-task --name "Say hello" --notes "Message" --list "À classer"
 THINGS_DEFAULT_LIST="À classer" things-agent add-task --name "Uses env default list"
 things-agent add-task --name "Native checklist" --subtasks "Point 1, Point 2" --auth-token "<token>"
@@ -204,7 +208,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule.
 | Command group | Commands | Notes |
 | --- | --- | --- |
 | Session and backup | `session-start`, `backup`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>]` | `restore` creates a pre-restore backup, quiesces Things, verifies files, and rolls back on failure |
-| Core listing/search | `lists`, `projects`, `tasks [--list <name>] [--query <text>]`, `search --query <text> [--list <name>]` | Works with localized list names |
+| Core listing/search | `lists`, `projects [--json]`, `tasks [--list <name>] [--query <text>] [--json]`, `search --query <text> [--list <name>] [--json]`, `show-task --name <name> [--json]` | `--json` is intended for agent consumption |
 | Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task`, `edit-task`, `delete-task`, `complete-task`, `uncomplete-task` | Standard to-do operations |
 | Task metadata | `set-task-notes`, `append-task-notes`, `set-task-date` | Notes and date updates |
