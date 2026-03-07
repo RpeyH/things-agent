@@ -5,20 +5,19 @@ import (
 	"strings"
 )
 
-func scriptListSubtasks(bundleID, taskName, taskID string) string {
-	taskName = strings.TrimSpace(taskName)
+func scriptListChildTasks(bundleID, parentName, parentID string) string {
 	return fmt.Sprintf(`tell application id "%s"
 %s  try
-    set subtasks to to dos of t
+    set childTasks to to dos of t
   on error errMsg number errNum
     return "status:unsupported" & linefeed & "code:" & (errNum as string) & linefeed & "message:" & errMsg
   end try
-  if (count subtasks) is 0 then
+  if (count childTasks) is 0 then
     return "status:empty"
   end if
   set out to "status:ok"
-  repeat with i from 1 to count subtasks
-    set s to item i of subtasks
+  repeat with i from 1 to count childTasks
+    set s to item i of childTasks
     set outLine to (i as string) & ". " & (name of s)
     if (notes of s is not missing value) and (notes of s is not "") then
       set outLine to outLine & " | " & (notes of s)
@@ -26,48 +25,47 @@ func scriptListSubtasks(bundleID, taskName, taskID string) string {
     set out to out & linefeed & outLine
   end repeat
   return out
-end tell`, bundleID, scriptResolveTaskRef(taskName, taskID))
+end tell`, bundleID, scriptResolveItemRef(parentName, parentID))
 }
 
-func scriptAddSubtask(bundleID, taskName, taskID, subtaskName, notes string) string {
+func scriptAddChildTask(bundleID, parentName, parentID, childTaskName, notes string) string {
 	script := fmt.Sprintf(`tell application id "%s"
 %s  try
     set s to make new to do at end of to dos of t with properties {name:"%s"}
-`, bundleID, scriptResolveTaskRef(taskName, taskID), escapeApple(subtaskName))
+`, bundleID, scriptResolveItemRef(parentName, parentID), escapeApple(childTaskName))
 	if strings.TrimSpace(notes) != "" {
 		script += fmt.Sprintf(`  set notes of s to "%s"
 `, escapeApple(notes))
 	}
 	script += `  return id of s
   on error
-    error "Cannot add a checklist item to this task."
+    error "Cannot add a child task to this item."
   end try
 end tell`
 	return script
 }
 
-func scriptFindSubtask(bundleID, taskName, taskID, subtaskName string, index int) string {
-	taskName = strings.TrimSpace(taskName)
-	subtaskName = strings.TrimSpace(subtaskName)
+func scriptFindChildTask(bundleID, parentName, parentID, childTaskName string, index int) string {
+	childTaskName = strings.TrimSpace(childTaskName)
 	var target string
 	if index > 0 {
 		target = fmt.Sprintf("item %d of to dos of t", index)
 	} else {
-		target = fmt.Sprintf(`first to do of to dos of t whose name is "%s"`, escapeApple(subtaskName))
+		target = fmt.Sprintf(`first to do of to dos of t whose name is "%s"`, escapeApple(childTaskName))
 	}
 	return fmt.Sprintf(`tell application id "%s"
 %s  try
     set s to %s
   on error
-    error "No checklist item found on this task."
+    error "No child task found on this item."
   end try
-`, bundleID, scriptResolveTaskRef(taskName, taskID), target)
+`, bundleID, scriptResolveItemRef(parentName, parentID), target)
 }
 
-func scriptShowTask(bundleID, taskName, taskID string, withChecklistItems bool) string {
-	checklistItemsBlock := "false"
-	if withChecklistItems {
-		checklistItemsBlock = "true"
+func scriptShowTask(bundleID, taskName, taskID string, withChildTasks bool) string {
+	childTasksBlock := "false"
+	if withChildTasks {
+		childTasksBlock = "true"
 	}
 	return fmt.Sprintf(`tell application id "%s"
 %s  set out to "ID: " & (id of t)
@@ -109,34 +107,34 @@ func scriptShowTask(bundleID, taskName, taskID string, withChecklistItems bool) 
   end if
   if %s then
     try
-      set checklistItems to to dos of t
-      set checklistLines to "No checklist items"
-      if (count checklistItems) > 0 then
-        set checklistLines to ""
-        repeat with i from 1 to count checklistItems
-          set s to item i of checklistItems
+      set childTasks to to dos of t
+      set childTaskLines to "No child tasks"
+      if (count childTasks) > 0 then
+        set childTaskLines to ""
+        repeat with i from 1 to count childTasks
+          set s to item i of childTasks
           set lineItem to (i as string) & ". " & (name of s) & " [" & (status of s as string) & "]"
           if (notes of s is not missing value) and (notes of s is not "") then
             set lineItem to lineItem & " | " & (notes of s)
           end if
-          if checklistLines is "" then
-            set checklistLines to lineItem
+          if childTaskLines is "" then
+            set childTaskLines to lineItem
           else
-            set checklistLines to checklistLines & linefeed & lineItem
+            set childTaskLines to childTaskLines & linefeed & lineItem
           end if
         end repeat
       end if
-      set out to out & linefeed & "Checklist Items:" & linefeed & checklistLines
+      set out to out & linefeed & "Child Tasks:" & linefeed & childTaskLines
     on error
-      set out to out & linefeed & "Checklist Items: not supported"
+      set out to out & linefeed & "Child Tasks: not supported"
     end try
   end if
   return out
-end tell`, bundleID, scriptResolveItemRef(taskName, taskID), checklistItemsBlock)
+end tell`, bundleID, scriptResolveItemRef(taskName, taskID), childTasksBlock)
 }
 
-func scriptEditSubtask(bundleID, taskName, taskID, subtaskName string, index int, newName, notes string) string {
-	script := scriptFindSubtask(bundleID, taskName, taskID, subtaskName, index)
+func scriptEditChildTask(bundleID, parentName, parentID, childTaskName string, index int, newName, notes string) string {
+	script := scriptFindChildTask(bundleID, parentName, parentID, childTaskName, index)
 	if newName != "" {
 		script += fmt.Sprintf(`  set name of s to "%s"
 `, escapeApple(newName))
@@ -150,20 +148,20 @@ end tell`
 	return script
 }
 
-func scriptDeleteSubtask(bundleID, taskName, taskID, subtaskName string, index int) string {
-	script := scriptFindSubtask(bundleID, taskName, taskID, subtaskName, index)
+func scriptDeleteChildTask(bundleID, parentName, parentID, childTaskName string, index int) string {
+	script := scriptFindChildTask(bundleID, parentName, parentID, childTaskName, index)
 	script += `  delete s
   return "ok"
 end tell`
 	return script
 }
 
-func scriptSetSubtaskStatus(bundleID, taskName, taskID, subtaskName string, index int, done bool) string {
+func scriptSetChildTaskStatus(bundleID, parentName, parentID, childTaskName string, index int, done bool) string {
 	state := "open"
 	if done {
 		state = "completed"
 	}
-	script := scriptFindSubtask(bundleID, taskName, taskID, subtaskName, index)
+	script := scriptFindChildTask(bundleID, parentName, parentID, childTaskName, index)
 	script += fmt.Sprintf(`  set status of s to %s
   return id of s
 end tell`, state)

@@ -53,8 +53,16 @@ func TestWriteCommandsReturnBackupErrorWhenDBIsMissing(t *testing.T) {
 		{
 			name: "add-checklist-item",
 			cmd: func() error {
-				c := newAddSubtaskCmd()
+				c := newAddChecklistItemCmd()
 				c.SetArgs([]string{"--task", "task", "--name", "sub"})
+				return c.Execute()
+			},
+		},
+		{
+			name: "add-child-task",
+			cmd: func() error {
+				c := newAddChildTaskCmd()
+				c.SetArgs([]string{"--parent", "task", "--name", "sub"})
 				return c.Execute()
 			},
 		},

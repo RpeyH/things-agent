@@ -10,7 +10,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: "ok"}
 		setupTestRuntime(t, t.TempDir(), fr)
 		cmd := newShowTaskCmd()
-		cmd.SetArgs([]string{"--name", "task-a", "--with-checklist-items=false"})
+		cmd.SetArgs([]string{"--name", "task-a", "--with-child-tasks=false"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("show-task failed: %v", err)
 		}
@@ -24,7 +24,7 @@ func TestTaskLifecycleCommands(t *testing.T) {
 		fr := &fakeRunner{output: "ok"}
 		setupTestRuntime(t, t.TempDir(), fr)
 		cmd := newShowTaskCmd()
-		cmd.SetArgs([]string{"--id", "task-1", "--with-checklist-items=false"})
+		cmd.SetArgs([]string{"--id", "task-1", "--with-child-tasks=false"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("show-task --id failed: %v", err)
 		}

@@ -62,7 +62,7 @@ func resolveTaskParentSelector(taskName, taskID string) (string, string, error) 
 
 func newShowTaskCmd() *cobra.Command {
 	var name, id string
-	var withChecklistItems bool
+	var withChildTasks bool
 	var jsonOutput bool
 	cmd := &cobra.Command{
 		Use:   "show-task",
@@ -78,14 +78,14 @@ func newShowTaskCmd() *cobra.Command {
 				return err
 			}
 			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChecklistItems), parseShowTaskJSON)
+				return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks), parseShowTaskJSON)
 			}
-			return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChecklistItems))
+			return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks))
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Task or project name")
 	cmd.Flags().StringVar(&id, "id", "", "Task or project ID")
-	cmd.Flags().BoolVar(&withChecklistItems, "with-checklist-items", true, "Include checklist items")
+	cmd.Flags().BoolVar(&withChildTasks, "with-child-tasks", true, "Include child tasks")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
 	return cmd
 }

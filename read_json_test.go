@@ -39,7 +39,7 @@ func TestParseShowTaskOutput(t *testing.T) {
 		"Tags: alpha, beta",
 		"Notes: line one",
 		"line two",
-		"Checklist Items:",
+		"Child Tasks:",
 		"1. Review [open] | note-a",
 		"2. Ship [completed]",
 	}, "\n")
@@ -57,8 +57,8 @@ func TestParseShowTaskOutput(t *testing.T) {
 	if len(item.Tags) != 2 || item.Tags[0] != "alpha" || item.Tags[1] != "beta" {
 		t.Fatalf("unexpected tags: %#v", item.Tags)
 	}
-	if len(item.ChecklistItems) != 2 || item.ChecklistItems[0].Name != "Review" || item.ChecklistItems[1].Status != "completed" {
-		t.Fatalf("unexpected checklist_items: %#v", item.ChecklistItems)
+	if len(item.ChildTasks) != 2 || item.ChildTasks[0].Name != "Review" || item.ChildTasks[1].Status != "completed" {
+		t.Fatalf("unexpected child_tasks: %#v", item.ChildTasks)
 	}
 }
 

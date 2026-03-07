@@ -7,31 +7,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newListSubtasksCmd() *cobra.Command {
-	var taskName, taskID string
-	cmd := &cobra.Command{
-		Use:   "list-checklist-items",
-		Short: "List checklist items for a task",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
-			if err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptListSubtasks(cfg.bundleID, taskName, taskID))
-		},
+func resolveParentSelector(parentName, parentID string) (string, string, error) {
+	parentName = strings.TrimSpace(parentName)
+	parentID = strings.TrimSpace(parentID)
+	switch {
+	case parentName == "" && parentID == "":
+		return "", "", errors.New("exactly one of --parent or --parent-id is required")
+	case parentName != "" && parentID != "":
+		return "", "", errors.New("exactly one of --parent or --parent-id is allowed")
+	default:
+		return parentName, parentID, nil
 	}
-	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
-	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	return cmd
 }
 
-func newAddSubtaskCmd() *cobra.Command {
-	var taskName, taskID, subtaskName string
+func newAddChecklistItemCmd() *cobra.Command {
+	var taskName, taskID, itemName string
 	cmd := &cobra.Command{
 		Use:   "add-checklist-item",
 		Short: "Add a native checklist item to a task",
@@ -45,8 +35,8 @@ func newAddSubtaskCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			subtaskName = strings.TrimSpace(subtaskName)
-			if subtaskName == "" {
+			itemName = strings.TrimSpace(itemName)
+			if itemName == "" {
 				return errors.New("--name is required")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
@@ -56,36 +46,93 @@ func newAddSubtaskCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptAppendChecklistByRef(cfg.bundleID, taskName, taskID, []string{subtaskName}, token))
+			return runResult(ctx, cfg, scriptAppendChecklistByRef(cfg.bundleID, taskName, taskID, []string{itemName}, token))
 		},
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
 	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
+	cmd.Flags().StringVar(&itemName, "name", "", "Checklist item name")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }
 
-func newEditSubtaskCmd() *cobra.Command {
-	var taskName, taskID, subtaskName, newName, notes string
-	var subtaskIndex int
+func newListChildTasksCmd() *cobra.Command {
+	var parentName, parentID string
 	cmd := &cobra.Command{
-		Use:   "edit-checklist-item",
-		Short: "Edit a checklist item",
+		Use:   "list-child-tasks",
+		Short: "List child tasks for a parent item",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
 			if err != nil {
 				return err
 			}
-			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
 			}
-			subtaskName = strings.TrimSpace(subtaskName)
+			return runResult(ctx, cfg, scriptListChildTasks(cfg.bundleID, parentName, parentID))
+		},
+	}
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	return cmd
+}
+
+func newAddChildTaskCmd() *cobra.Command {
+	var parentName, parentID, childTaskName, notes string
+	cmd := &cobra.Command{
+		Use:   "add-child-task",
+		Short: "Add a child task under a parent item",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
+			if err != nil {
+				return err
+			}
+			childTaskName = strings.TrimSpace(childTaskName)
+			notes = strings.TrimSpace(notes)
+			if childTaskName == "" {
+				return errors.New("--name is required")
+			}
+			if err := backupIfNeeded(ctx, cfg); err != nil {
+				return err
+			}
+			return runResult(ctx, cfg, scriptAddChildTask(cfg.bundleID, parentName, parentID, childTaskName, notes))
+		},
+	}
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	cmd.Flags().StringVar(&childTaskName, "name", "", "Child task name")
+	cmd.Flags().StringVar(&notes, "notes", "", "Child task notes")
+	_ = cmd.MarkFlagRequired("name")
+	return cmd
+}
+
+func newEditChildTaskCmd() *cobra.Command {
+	var parentName, parentID, childTaskName, newName, notes string
+	var childTaskIndex int
+	cmd := &cobra.Command{
+		Use:   "edit-child-task",
+		Short: "Edit a child task",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			cfg, err := resolveRuntimeConfig(ctx)
+			if err != nil {
+				return err
+			}
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
+			if err != nil {
+				return err
+			}
+			childTaskName = strings.TrimSpace(childTaskName)
 			newName = strings.TrimSpace(newName)
 			notes = strings.TrimSpace(notes)
-			if subtaskIndex <= 0 && subtaskName == "" {
+			if childTaskIndex <= 0 && childTaskName == "" {
 				return errors.New("provide --index (>=1) or --name")
 			}
 			if newName == "" && notes == "" {
@@ -94,113 +141,113 @@ func newEditSubtaskCmd() *cobra.Command {
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptEditSubtask(cfg.bundleID, taskName, taskID, subtaskName, subtaskIndex, newName, notes))
+			return runResult(ctx, cfg, scriptEditChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskIndex, newName, notes))
 		},
 	}
-	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
-	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Target checklist item name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Target checklist item index (1-based)")
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	cmd.Flags().StringVar(&childTaskName, "name", "", "Target child task name")
+	cmd.Flags().IntVar(&childTaskIndex, "index", 0, "Target child task index (1-based)")
 	cmd.Flags().StringVar(&newName, "new-name", "", "New name")
 	cmd.Flags().StringVar(&notes, "notes", "", "New notes")
 	return cmd
 }
 
-func newDeleteSubtaskCmd() *cobra.Command {
-	var taskName, taskID, subtaskName string
-	var subtaskIndex int
+func newDeleteChildTaskCmd() *cobra.Command {
+	var parentName, parentID, childTaskName string
+	var childTaskIndex int
 	cmd := &cobra.Command{
-		Use:   "delete-checklist-item",
-		Short: "Delete a checklist item",
+		Use:   "delete-child-task",
+		Short: "Delete a child task",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
 			if err != nil {
 				return err
 			}
-			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
 			}
-			subtaskName = strings.TrimSpace(subtaskName)
-			if subtaskIndex <= 0 && subtaskName == "" {
+			childTaskName = strings.TrimSpace(childTaskName)
+			if childTaskIndex <= 0 && childTaskName == "" {
 				return errors.New("provide --index (>=1) or --name")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptDeleteSubtask(cfg.bundleID, taskName, taskID, subtaskName, subtaskIndex))
+			return runResult(ctx, cfg, scriptDeleteChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskIndex))
 		},
 	}
-	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
-	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	cmd.Flags().StringVar(&childTaskName, "name", "", "Child task name")
+	cmd.Flags().IntVar(&childTaskIndex, "index", 0, "Child task index (1-based)")
 	return cmd
 }
 
-func newCompleteSubtaskCmd() *cobra.Command {
-	var taskName, taskID, subtaskName string
-	var subtaskIndex int
+func newCompleteChildTaskCmd() *cobra.Command {
+	var parentName, parentID, childTaskName string
+	var childTaskIndex int
 	cmd := &cobra.Command{
-		Use:   "complete-checklist-item",
-		Short: "Mark checklist item as completed",
+		Use:   "complete-child-task",
+		Short: "Mark child task as completed",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
 			if err != nil {
 				return err
 			}
-			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
 			}
-			subtaskName = strings.TrimSpace(subtaskName)
-			if subtaskIndex <= 0 && subtaskName == "" {
+			childTaskName = strings.TrimSpace(childTaskName)
+			if childTaskIndex <= 0 && childTaskName == "" {
 				return errors.New("provide --index (>=1) or --name")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptSetSubtaskStatus(cfg.bundleID, taskName, taskID, subtaskName, subtaskIndex, true))
+			return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskIndex, true))
 		},
 	}
-	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
-	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	cmd.Flags().StringVar(&childTaskName, "name", "", "Child task name")
+	cmd.Flags().IntVar(&childTaskIndex, "index", 0, "Child task index (1-based)")
 	return cmd
 }
 
-func newUncompleteSubtaskCmd() *cobra.Command {
-	var taskName, taskID, subtaskName string
-	var subtaskIndex int
+func newUncompleteChildTaskCmd() *cobra.Command {
+	var parentName, parentID, childTaskName string
+	var childTaskIndex int
 	cmd := &cobra.Command{
-		Use:   "uncomplete-checklist-item",
-		Short: "Mark checklist item as uncompleted",
+		Use:   "uncomplete-child-task",
+		Short: "Mark child task as uncompleted",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			cfg, err := resolveRuntimeConfig(ctx)
 			if err != nil {
 				return err
 			}
-			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
+			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
 			}
-			subtaskName = strings.TrimSpace(subtaskName)
-			if subtaskIndex <= 0 && subtaskName == "" {
+			childTaskName = strings.TrimSpace(childTaskName)
+			if childTaskIndex <= 0 && childTaskName == "" {
 				return errors.New("provide --index (>=1) or --name")
 			}
 			if err := backupIfNeeded(ctx, cfg); err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptSetSubtaskStatus(cfg.bundleID, taskName, taskID, subtaskName, subtaskIndex, false))
+			return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskIndex, false))
 		},
 	}
-	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
-	cmd.Flags().StringVar(&taskID, "task-id", "", "Task ID parent")
-	cmd.Flags().StringVar(&subtaskName, "name", "", "Checklist item name")
-	cmd.Flags().IntVar(&subtaskIndex, "index", 0, "Checklist item index (1-based)")
+	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
+	cmd.Flags().StringVar(&parentID, "parent-id", "", "Parent item ID")
+	cmd.Flags().StringVar(&childTaskName, "name", "", "Child task name")
+	cmd.Flags().IntVar(&childTaskIndex, "index", 0, "Child task index (1-based)")
 	return cmd
 }
