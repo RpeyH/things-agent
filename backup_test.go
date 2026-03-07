@@ -121,6 +121,42 @@ func TestBackupManagerListAndVerify(t *testing.T) {
 	}
 }
 
+func TestBackupManagerCreateWritesSemanticManifest(t *testing.T) {
+	tmp := t.TempDir()
+	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		if err := os.WriteFile(filepath.Join(tmp, base), []byte("x"), 0o644); err != nil {
+			t.Fatalf("write %s failed: %v", base, err)
+		}
+	}
+
+	bm := newBackupManager(tmp)
+	expected := backupSemanticSnapshot{
+		ListsCount:    1,
+		ListsHash:     "a",
+		ProjectsCount: 2,
+		ProjectsHash:  "b",
+		TasksCount:    3,
+		TasksHash:     "c",
+	}
+	bm.semanticSnapshot = func(context.Context) (backupSemanticSnapshot, error) {
+		return expected, nil
+	}
+
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	ts := inferTimestamp(created[0])
+
+	got, err := bm.loadSemanticSnapshot(ts)
+	if err != nil {
+		t.Fatalf("loadSemanticSnapshot failed: %v", err)
+	}
+	if got != expected {
+		t.Fatalf("unexpected semantic manifest: got %#v want %#v", got, expected)
+	}
+}
+
 func TestBackupManagerCreateAvoidsTimestampCollisions(t *testing.T) {
 	tmp := t.TempDir()
 	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {

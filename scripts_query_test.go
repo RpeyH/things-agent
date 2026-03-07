@@ -60,13 +60,13 @@ func TestScriptAllProjectsStructured(t *testing.T) {
 	}
 }
 
-func TestScriptRestoreSemanticCheck(t *testing.T) {
-	got := scriptRestoreSemanticCheck("bundle.id")
-	if !strings.Contains(got, "restore semantic verify") {
-		t.Fatalf("expected restore semantic marker, got: %s", got)
+func TestScriptSemanticSnapshot(t *testing.T) {
+	got := scriptSemanticSnapshot("bundle.id")
+	if !strings.Contains(got, `repeat with l in every list`) || !strings.Contains(got, `repeat with p in every project`) || !strings.Contains(got, `count of to dos`) {
+		t.Fatalf("expected semantic snapshot loops, got: %s", got)
 	}
-	if !strings.Contains(got, `count of lists`) || !strings.Contains(got, `count of projects`) {
-		t.Fatalf("expected semantic counts in script, got: %s", got)
+	if !strings.Contains(got, `"L" & tab`) || !strings.Contains(got, `"P" & tab`) || !strings.Contains(got, `"T" & tab`) {
+		t.Fatalf("expected typed semantic snapshot rows, got: %s", got)
 	}
 }
 

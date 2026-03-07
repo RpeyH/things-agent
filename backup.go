@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,15 +16,25 @@ import (
 )
 
 type backupManager struct {
-	dataDir string
-	copyFn  func(src, dst string) error
-	nowFn   func() time.Time
+	dataDir          string
+	copyFn           func(src, dst string) error
+	nowFn            func() time.Time
+	semanticSnapshot func(context.Context) (backupSemanticSnapshot, error)
 }
 
 type backupSnapshot struct {
 	Timestamp string   `json:"timestamp"`
 	Complete  bool     `json:"complete"`
 	Files     []string `json:"files"`
+}
+
+type backupSemanticSnapshot struct {
+	ListsCount    int    `json:"lists_count"`
+	ListsHash     string `json:"lists_hash"`
+	ProjectsCount int    `json:"projects_count"`
+	ProjectsHash  string `json:"projects_hash"`
+	TasksCount    int    `json:"tasks_count"`
+	TasksHash     string `json:"tasks_hash"`
 }
 
 func newBackupManager(dataDir string) *backupManager {
@@ -56,6 +69,15 @@ func (bm *backupManager) Create(ctx context.Context) ([]string, error) {
 	}
 	if len(created) == 0 {
 		return nil, errors.New("no backupable database file found")
+	}
+	if bm.semanticSnapshot != nil {
+		snapshot, err := bm.semanticSnapshot(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("backup created but semantic snapshot failed: %w", err)
+		}
+		if err := bm.writeSemanticSnapshot(ts, snapshot); err != nil {
+			return nil, fmt.Errorf("backup created but semantic snapshot save failed: %w", err)
+		}
 	}
 	if err := bm.prune(ctx, maxBackupsToKeep); err != nil {
 		return nil, fmt.Errorf("backup created but retention failed: %w", err)
@@ -192,6 +214,9 @@ func (bm *backupManager) prune(ctx context.Context, keep int) error {
 				return err
 			}
 		}
+		if err := os.Remove(bm.semanticSnapshotPath(ts)); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 	}
 	return nil
 }
@@ -225,6 +250,10 @@ func (bm *backupManager) allTimestamps() ([]string, error) {
 
 func (bm *backupManager) backupPath() string {
 	return filepath.Join(bm.dataDir, backupDirName)
+}
+
+func (bm *backupManager) semanticSnapshotPath(ts string) string {
+	return filepath.Join(bm.backupPath(), "manifest."+ts+".json")
 }
 
 func (bm *backupManager) ensureBackupDir() (string, error) {
@@ -271,6 +300,33 @@ func (bm *backupManager) timestampExists(ts string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+func (bm *backupManager) writeSemanticSnapshot(ts string, snapshot backupSemanticSnapshot) error {
+	path := bm.semanticSnapshotPath(ts)
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func (bm *backupManager) loadSemanticSnapshot(ts string) (backupSemanticSnapshot, error) {
+	data, err := os.ReadFile(bm.semanticSnapshotPath(ts))
+	if err != nil {
+		return backupSemanticSnapshot{}, err
+	}
+	var snapshot backupSemanticSnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return backupSemanticSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func hashSemanticLines(lines []string) string {
+	sort.Strings(lines)
+	sum := sha256.Sum256([]byte(strings.Join(lines, "\n")))
+	return hex.EncodeToString(sum[:])
 }
 
 func parseToAppleDate(value string) (string, error) {

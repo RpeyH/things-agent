@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -70,7 +69,7 @@ type restoreExecutor struct {
 	stablePasses       int
 	quiesceGracePeriod time.Duration
 	captureFileState   func(string) ([]liveFileState, error)
-	semanticCheck      func(context.Context) (restoreSemanticVerification, error)
+	semanticCheck      func(context.Context) (backupSemanticSnapshot, error)
 }
 
 type restorePreflightReport struct {
@@ -119,26 +118,27 @@ type restoreJournalStep struct {
 }
 
 type restoreJournal struct {
-	RequestedTimestamp   string                       `json:"requested_timestamp,omitempty"`
-	Timestamp            string                       `json:"timestamp"`
-	DryRun               bool                         `json:"dry_run"`
-	Outcome              string                       `json:"outcome"`
-	AppWasRunning        bool                         `json:"app_was_running"`
-	Preflight            restorePreflightReport       `json:"preflight"`
-	PreRestoreBackup     *restoreBackupRecord         `json:"pre_restore_backup,omitempty"`
-	RestoredFiles        []string                     `json:"restored_files,omitempty"`
-	Verification         *restoreVerificationReport   `json:"verification,omitempty"`
-	PostLaunchVerification *restoreVerificationReport `json:"post_launch_verification,omitempty"`
-	SemanticVerification *restoreSemanticVerification `json:"semantic_verification,omitempty"`
-	Rollback             *restoreRollbackReport       `json:"rollback,omitempty"`
-	Steps                []restoreJournalStep         `json:"steps"`
+	RequestedTimestamp     string                       `json:"requested_timestamp,omitempty"`
+	Timestamp              string                       `json:"timestamp"`
+	DryRun                 bool                         `json:"dry_run"`
+	Outcome                string                       `json:"outcome"`
+	AppWasRunning          bool                         `json:"app_was_running"`
+	Preflight              restorePreflightReport       `json:"preflight"`
+	PreRestoreBackup       *restoreBackupRecord         `json:"pre_restore_backup,omitempty"`
+	RestoredFiles          []string                     `json:"restored_files,omitempty"`
+	Verification           *restoreVerificationReport   `json:"verification,omitempty"`
+	PostLaunchVerification *restoreVerificationReport   `json:"post_launch_verification,omitempty"`
+	SemanticVerification   *restoreSemanticVerification `json:"semantic_verification,omitempty"`
+	Rollback               *restoreRollbackReport       `json:"rollback,omitempty"`
+	Steps                  []restoreJournalStep         `json:"steps"`
 }
 
 type restoreSemanticVerification struct {
-	OK              bool `json:"ok"`
-	Lists           int  `json:"lists"`
-	Projects        int  `json:"projects"`
-	TemporaryLaunch bool `json:"temporary_launch,omitempty"`
+	OK                 bool                    `json:"ok"`
+	Expected           *backupSemanticSnapshot `json:"expected,omitempty"`
+	Actual             backupSemanticSnapshot  `json:"actual"`
+	ComparedToManifest bool                    `json:"compared_to_manifest,omitempty"`
+	TemporaryLaunch    bool                    `json:"temporary_launch,omitempty"`
 }
 
 func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
@@ -153,7 +153,7 @@ func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 		stablePasses:       restoreStablePasses,
 		quiesceGracePeriod: restoreQuiesceGracePeriod,
 		captureFileState:   captureLiveFileState,
-		semanticCheck:      newScriptSemanticVerifier(cfg.bundleID, cfg.runner).Check,
+		semanticCheck:      newScriptSemanticSnapshotter(cfg.bundleID, cfg.runner).Snapshot,
 	}
 }
 
@@ -249,11 +249,18 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "semantic-launch", Status: "ok"})
 	}
 
-	semantic, err := r.semanticCheck(ctx)
-	if !preflight.AppRunning {
-		semantic.TemporaryLaunch = true
+	actualSemantic, err := r.semanticCheck(ctx)
+	if err != nil {
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "semantic-verify", Status: "failed", Error: err.Error()})
+		rollback, restoreErr := r.restoreFailureWithAppState(ctx, preRestoreTS, preflight.AppRunning, true, fmt.Errorf("semantic verify restored snapshot %s: %w", preflight.Timestamp, err))
+		journal.Rollback = rollback
+		return journal, restoreErr
 	}
-	journal.SemanticVerification = &semantic
+	semanticReport, err := r.buildSemanticVerification(preflight.Timestamp, actualSemantic)
+	if !preflight.AppRunning {
+		semanticReport.TemporaryLaunch = true
+	}
+	journal.SemanticVerification = &semanticReport
 	if err != nil {
 		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "semantic-verify", Status: "failed", Error: err.Error()})
 		rollback, restoreErr := r.restoreFailureWithAppState(ctx, preRestoreTS, preflight.AppRunning, true, fmt.Errorf("semantic verify restored snapshot %s: %w", preflight.Timestamp, err))
@@ -262,21 +269,35 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 	}
 	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "semantic-verify", Status: "ok"})
 
+	if semanticReport.ComparedToManifest {
+		if !preflight.AppRunning {
+			if err := r.closeAfterTemporaryLaunch(ctx); err != nil {
+				journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore-app-state", Status: "failed", Error: err.Error()})
+				return journal, err
+			}
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore-app-state", Status: "ok"})
+		}
+		journal.Outcome = "restored"
+		return journal, nil
+	}
+
 	if err := r.quiesce(ctx, true); err != nil {
 		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reclose", Status: "failed", Error: err.Error()})
 		return journal, err
 	}
 	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reclose", Status: "ok"})
 
-	postLaunchVerification, err := r.Verify(ctx, preflight.Timestamp)
-	journal.PostLaunchVerification = &postLaunchVerification
-	if err != nil {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "post-launch-verify", Status: "failed", Error: err.Error()})
-		rollback, restoreErr := r.restoreFailureWithAppState(ctx, preRestoreTS, preflight.AppRunning, false, fmt.Errorf("post-launch verify restored snapshot %s: %w", preflight.Timestamp, err))
-		journal.Rollback = rollback
-		return journal, restoreErr
+	if !semanticReport.ComparedToManifest {
+		postLaunchVerification, err := r.Verify(ctx, preflight.Timestamp)
+		journal.PostLaunchVerification = &postLaunchVerification
+		if err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "post-launch-verify", Status: "failed", Error: err.Error()})
+			rollback, restoreErr := r.restoreFailureWithAppState(ctx, preRestoreTS, preflight.AppRunning, false, fmt.Errorf("post-launch verify restored snapshot %s: %w", preflight.Timestamp, err))
+			journal.Rollback = rollback
+			return journal, restoreErr
+		}
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "post-launch-verify", Status: "ok"})
 	}
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "post-launch-verify", Status: "ok"})
 
 	if preflight.AppRunning {
 		if err := r.app.Activate(ctx, r.bundleID); err != nil {
@@ -380,6 +401,13 @@ func (r *restoreExecutor) waitForStopped(ctx context.Context) error {
 		}
 		r.sleep(r.pollInterval)
 	}
+}
+
+func (r *restoreExecutor) closeAfterTemporaryLaunch(ctx context.Context) error {
+	if err := r.app.Quit(ctx, r.bundleID); err != nil {
+		return err
+	}
+	return r.waitForStopped(ctx)
 }
 
 func (r *restoreExecutor) waitForStableFiles(ctx context.Context) error {
@@ -488,47 +516,26 @@ func (r *restoreExecutor) restoreFailureWithAppState(ctx context.Context, rollba
 	return report, fmt.Errorf("%w; rollback succeeded", cause)
 }
 
-type scriptSemanticVerifier struct {
-	bundleID string
-	runner   scriptRunner
-}
+func (r *restoreExecutor) buildSemanticVerification(timestamp string, actual backupSemanticSnapshot) (restoreSemanticVerification, error) {
+	report := restoreSemanticVerification{
+		OK:     true,
+		Actual: actual,
+	}
 
-func newScriptSemanticVerifier(bundleID string, runner scriptRunner) scriptSemanticVerifier {
-	return scriptSemanticVerifier{
-		bundleID: bundleID,
-		runner:   runner,
-	}
-}
-
-func (v scriptSemanticVerifier) Check(ctx context.Context) (restoreSemanticVerification, error) {
-	out, err := v.runner.run(ctx, scriptRestoreSemanticCheck(v.bundleID))
+	expected, err := r.backups.loadSemanticSnapshot(timestamp)
 	if err != nil {
-		return restoreSemanticVerification{}, fmt.Errorf("run semantic restore check: %w", err)
+		if os.IsNotExist(err) {
+			return report, nil
+		}
+		return report, fmt.Errorf("load semantic snapshot %s: %w", timestamp, err)
 	}
-	return parseRestoreSemanticVerification(out)
-}
-
-func parseRestoreSemanticVerification(raw string) (restoreSemanticVerification, error) {
-	rows, err := parseStructuredRows(raw, 2)
-	if err != nil {
-		return restoreSemanticVerification{}, err
+	report.Expected = &expected
+	report.ComparedToManifest = true
+	if err := compareSemanticSnapshots(expected, actual); err != nil {
+		report.OK = false
+		return report, err
 	}
-	if len(rows) != 1 {
-		return restoreSemanticVerification{}, errors.New("semantic restore check returned no result")
-	}
-	lists, err := strconv.Atoi(rows[0][0])
-	if err != nil {
-		return restoreSemanticVerification{}, fmt.Errorf("parse semantic list count: %w", err)
-	}
-	projects, err := strconv.Atoi(rows[0][1])
-	if err != nil {
-		return restoreSemanticVerification{}, fmt.Errorf("parse semantic project count: %w", err)
-	}
-	return restoreSemanticVerification{
-		OK:       true,
-		Lists:    lists,
-		Projects: projects,
-	}, nil
+	return report, nil
 }
 
 func verifySnapshotAgainstLive(dataDir string, snapshotFiles []string) error {

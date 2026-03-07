@@ -84,6 +84,17 @@ func readLiveDBFile(t *testing.T, dir, base string) string {
 	return string(data)
 }
 
+func testSemanticSnapshot(lists, projects, tasks int) backupSemanticSnapshot {
+	return backupSemanticSnapshot{
+		ListsCount:    lists,
+		ListsHash:     strings.Repeat("l", 64),
+		ProjectsCount: projects,
+		ProjectsHash:  strings.Repeat("p", 64),
+		TasksCount:    tasks,
+		TasksHash:     strings.Repeat("t", 64),
+	}
+}
+
 func newTestRestoreExecutor(bm *backupManager, app appController) *restoreExecutor {
 	return &restoreExecutor{
 		backups:          bm,
@@ -101,8 +112,8 @@ func newTestRestoreExecutor(bm *backupManager, app appController) *restoreExecut
 				{Name: "main.sqlite-wal", Size: 1, ModTime: 1},
 			}, nil
 		},
-		semanticCheck: func(context.Context) (restoreSemanticVerification, error) {
-			return restoreSemanticVerification{OK: true, Lists: 1, Projects: 0}, nil
+		semanticCheck: func(context.Context) (backupSemanticSnapshot, error) {
+			return testSemanticSnapshot(1, 0, 0), nil
 		},
 	}
 }
@@ -283,9 +294,9 @@ func TestRestoreExecutorRunsSemanticVerificationAndRestoresClosedState(t *testin
 	app := &fakeAppController{running: []bool{false, true, false, false}}
 	exec := newTestRestoreExecutor(bm, app)
 	semanticCalls := 0
-	exec.semanticCheck = func(context.Context) (restoreSemanticVerification, error) {
+	exec.semanticCheck = func(context.Context) (backupSemanticSnapshot, error) {
 		semanticCalls++
-		return restoreSemanticVerification{OK: true, Lists: 2, Projects: 1}, nil
+		return testSemanticSnapshot(2, 1, 3), nil
 	}
 
 	journal, err := exec.Execute(context.Background(), targetTS, false)
@@ -297,6 +308,9 @@ func TestRestoreExecutorRunsSemanticVerificationAndRestoresClosedState(t *testin
 	}
 	if journal.SemanticVerification == nil || !journal.SemanticVerification.OK || !journal.SemanticVerification.TemporaryLaunch {
 		t.Fatalf("unexpected semantic verification journal: %#v", journal.SemanticVerification)
+	}
+	if journal.SemanticVerification.Actual.ListsCount != 2 || journal.SemanticVerification.Actual.ProjectsCount != 1 || journal.SemanticVerification.Actual.TasksCount != 3 {
+		t.Fatalf("unexpected semantic verification actual snapshot: %#v", journal.SemanticVerification)
 	}
 	quitCalls, activateCalls := app.counts()
 	if quitCalls != 1 || activateCalls != 1 {
@@ -318,8 +332,8 @@ func TestRestoreExecutorRollsBackWhenSemanticVerificationFails(t *testing.T) {
 
 	app := &fakeAppController{running: []bool{false, true, false, false}}
 	exec := newTestRestoreExecutor(bm, app)
-	exec.semanticCheck = func(context.Context) (restoreSemanticVerification, error) {
-		return restoreSemanticVerification{}, errors.New("semantic probe failed")
+	exec.semanticCheck = func(context.Context) (backupSemanticSnapshot, error) {
+		return backupSemanticSnapshot{}, errors.New("semantic probe failed")
 	}
 
 	_, err = exec.Execute(context.Background(), targetTS, false)
@@ -361,6 +375,74 @@ func TestRestoreExecutorRollsBackWhenPostLaunchVerificationFails(t *testing.T) {
 	}
 	if got := readLiveDBFile(t, tmp, "main.sqlite"); got != "main.sqlite:after" {
 		t.Fatalf("expected rollback to restore previous live state, got %q", got)
+	}
+}
+
+func TestRestoreExecutorUsesSemanticManifestInsteadOfPostLaunchFileDiff(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	expectedSnapshot := testSemanticSnapshot(2, 1, 3)
+	bm.semanticSnapshot = func(context.Context) (backupSemanticSnapshot, error) {
+		return expectedSnapshot, nil
+	}
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+	writeLiveDBSet(t, tmp, "after")
+
+	activateCalls := 0
+	app := &fakeAppController{
+		running: []bool{true, true, false},
+		activateFn: func() {
+			activateCalls++
+			writeLiveDBSet(t, tmp, "drifted")
+		},
+	}
+	exec := newTestRestoreExecutor(bm, app)
+	exec.semanticCheck = func(context.Context) (backupSemanticSnapshot, error) {
+		return expectedSnapshot, nil
+	}
+
+	journal, err := exec.Execute(context.Background(), targetTS, false)
+	if err != nil {
+		t.Fatalf("expected manifest-backed restore to succeed: %v", err)
+	}
+	if journal.SemanticVerification == nil || !journal.SemanticVerification.ComparedToManifest || !journal.SemanticVerification.OK {
+		t.Fatalf("expected manifest-backed semantic verification, got %#v", journal.SemanticVerification)
+	}
+	if journal.PostLaunchVerification != nil {
+		t.Fatalf("expected post-launch file verification to be skipped when manifest exists, got %#v", journal.PostLaunchVerification)
+	}
+}
+
+func TestRestoreExecutorRollsBackWhenSemanticManifestMismatches(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	bm.semanticSnapshot = func(context.Context) (backupSemanticSnapshot, error) {
+		return testSemanticSnapshot(2, 1, 3), nil
+	}
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+	writeLiveDBSet(t, tmp, "after")
+
+	app := &fakeAppController{running: []bool{false, true, false, false}}
+	exec := newTestRestoreExecutor(bm, app)
+	exec.semanticCheck = func(context.Context) (backupSemanticSnapshot, error) {
+		return testSemanticSnapshot(2, 1, 4), nil
+	}
+
+	_, err = exec.Execute(context.Background(), targetTS, false)
+	if err == nil || !strings.Contains(err.Error(), "semantic verify restored snapshot") || !strings.Contains(err.Error(), "task snapshot mismatch") || !strings.Contains(err.Error(), "rollback succeeded") {
+		t.Fatalf("expected semantic manifest rollback error, got %v", err)
 	}
 }
 

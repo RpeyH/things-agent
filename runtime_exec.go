@@ -42,6 +42,13 @@ func backupIfNeeded(ctx context.Context, cfg *runtimeConfig) error {
 	return nil
 }
 
+func newSemanticBackupManager(cfg *runtimeConfig) *backupManager {
+	bm := newBackupManager(cfg.dataDir)
+	snapshotter := newScriptSemanticSnapshotter(cfg.bundleID, cfg.runner)
+	bm.semanticSnapshot = snapshotter.Snapshot
+	return bm
+}
+
 func runResult(ctx context.Context, cfg *runtimeConfig, script string) error {
 	out, err := cfg.runner.run(ctx, script)
 	if err != nil {

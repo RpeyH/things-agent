@@ -84,7 +84,7 @@ func newBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := newBackupManager(cfg.dataDir).Create(ctx)
+			paths, err := newSemanticBackupManager(cfg).Create(ctx)
 			if err != nil {
 				return err
 			}
@@ -228,7 +228,7 @@ func newSessionStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := newBackupManager(cfg.dataDir).Create(ctx)
+			paths, err := newSemanticBackupManager(cfg).Create(ctx)
 			if err != nil {
 				return err
 			}
