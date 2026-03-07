@@ -135,6 +135,81 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 	})
 
+	t.Run("restore-state dry-run emits a surgical plan", func(t *testing.T) {
+		target := thingsStateSnapshot{
+			SchemaVersion: 1,
+			Areas:         []thingsStateArea{{ID: "area-1", Name: "Area A"}},
+			Projects: []thingsStateProject{{
+				ID:     "project-1",
+				Name:   "Project A",
+				AreaID: "area-1",
+				Area:   "Area A",
+				Notes:  "target notes",
+				Tags:   []string{"tag-a"},
+			}},
+			Tasks: []thingsStateTask{{
+				ID:        "task-1",
+				Name:      "Task A",
+				AreaID:    "area-1",
+				Area:      "Area A",
+				ProjectID: "project-1",
+				Project:   "Project A",
+				Due:       "2026-03-07 00:00:00",
+				Deadline:  "2026-03-08 00:00:00",
+				Notes:     "target task",
+				Tags:      []string{"tag-a"},
+			}},
+		}
+		runner := runnerFunc(func(_ context.Context, script string) (string, error) {
+			if strings.Contains(script, "state snapshot capture") {
+				return strings.Join([]string{
+					`A	area-1	Area Renamed`,
+					`P	project-1	Project A	open	area-1	Area Renamed	current notes	tag-b`,
+				}, "\n"), nil
+			}
+			return "", nil
+		})
+		tmp := setupTestRuntimeWithDB(t, runner)
+
+		bm := newBackupManager(tmp)
+		if _, err := bm.ensureBackupDir(); err != nil {
+			t.Fatalf("ensureBackupDir failed: %v", err)
+		}
+		if err := bm.writeStateSnapshot("2026-03-07:10-10-10", target); err != nil {
+			t.Fatalf("writeStateSnapshot failed: %v", err)
+		}
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore-state", "--timestamp", "2026-03-07:10-10-10", "--dry-run", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore-state dry-run to succeed: %v", err)
+		}
+
+		var payload struct {
+			Timestamp string `json:"timestamp"`
+			Actions   []struct {
+				Kind       string            `json:"kind"`
+				EntityType string            `json:"entity_type"`
+				Name       string            `json:"name"`
+				Details    map[string]string `json:"details"`
+			} `json:"actions"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+			t.Fatalf("expected restore-state JSON, got %q (%v)", stdout, err)
+		}
+		if payload.Timestamp != "2026-03-07:10-10-10" {
+			t.Fatalf("unexpected timestamp payload: %#v", payload)
+		}
+		kinds := make([]string, 0, len(payload.Actions))
+		for _, action := range payload.Actions {
+			kinds = append(kinds, action.Kind)
+		}
+		if !strings.Contains(strings.Join(kinds, ","), "rename-area") || !strings.Contains(strings.Join(kinds, ","), "update-project-notes") || !strings.Contains(strings.Join(kinds, ","), "set-project-tags") || !strings.Contains(strings.Join(kinds, ","), "create-task") {
+			t.Fatalf("unexpected dry-run actions: %#v", payload.Actions)
+		}
+	})
+
 	t.Run("create commands require explicit destination", func(t *testing.T) {
 		t.Run("add-task rejects missing destination", func(t *testing.T) {
 			fr := &fakeRunner{output: "task-id-1"}
