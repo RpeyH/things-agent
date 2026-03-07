@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -44,5 +46,14 @@ func TestBackupIfDestructiveBranches(t *testing.T) {
 	cfgOK := &runtimeConfig{dataDir: tmp}
 	if err := backupIfDestructive(ctx, cfgOK); err != nil {
 		t.Fatalf("backupIfDestructive should succeed with db files: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(tmp, backupDirName))
+	if err != nil {
+		t.Fatalf("ReadDir backup dir failed: %v", err)
+	}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == ".json" {
+			t.Fatalf("destructive auto backup should not write manifests, got %s", entry.Name())
+		}
 	}
 }

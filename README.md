@@ -6,7 +6,7 @@
 [![Coverage](https://codecov.io/gh/alnah/things-agent/graph/badge.svg)](https://codecov.io/gh/alnah/things-agent)
 [![License](https://img.shields.io/github/license/alnah/things-agent)](./LICENSE)
 
-Go CLI to drive Things (macOS) through AppleScript only, built with `cobra`.
+Go CLI to drive Things (macOS) through AppleScript, built with `cobra`.
 
 See [AGENTS.md](./AGENTS.md) for project operation rules (session-start backup, retention, safety, conventions).
 
@@ -28,7 +28,8 @@ It should also be usable from other local-agent setups (for example Cline), but 
 - Things app installed
 - `osascript`
 
-The CLI never accesses the Things SQLite database directly.
+Agents must never touch the Things database directly.
+The CLI itself uses AppleScript for operational reads and writes, and a narrowly scoped internal SQLite step only during `restore` to clear local sync metadata after a package swap.
 Some native checklist operations (URL scheme `update`) require a Things auth token (`THINGS_AUTH_TOKEN` or `--auth-token`).
 Things uses both user areas and built-in lists (`Inbox`, `Today`, `Logbook`, etc.); this CLI uses `area` for the area entity and keeps `list` only for generic Things list filters and official URL parameters.
 For token, permissions, and list-locale errors, see [Troubleshooting](#troubleshooting).
@@ -73,7 +74,7 @@ Use this project at your own risk.
 - Deletion remains available item by item (`delete-task`, `delete-project`, `delete-area`) with backup beforehand.
 - `session-start` backup is required in agent instructions before state-changing operations.
 - Backups are rotated and capped at 50 snapshots.
-- On the author's machine at the time of writing, the full `backups/` folder uses roughly `316 MB` total; this includes SQLite backup files plus backup metadata, and will vary with database and WAL size.
+- On the author's machine at the time of writing, the full `Backups/` folder uses roughly `316 MB` total; this includes package snapshots plus backup metadata, and will vary with database size.
 - `AGENTS.md` explicitly forbids direct SQLite access.
 - Bypassing CLI constraints through alternative command paths requires explicit user decision and responsibility.
 
@@ -139,7 +140,6 @@ things-agent session-start
 things-agent session-start
 things-agent backup
 things-agent backup --settle 10s
-things-agent backup --query "RestoreDB"
 things-agent areas
 things-agent restore list --json
 things-agent restore --timestamp "2026-03-07:14-45-09" --network-isolation sandbox-no-network --json
@@ -214,9 +214,9 @@ things-agent tasks --list "À classer"
 
 Always use exact list names returned by `things-agent lists` (including accents and casing).
 
-### Read-only database audit
+### Read-only operational audit
 
-The CLI does not read SQLite directly. Use read commands to get a clear operational snapshot:
+Use read commands to get a clear operational snapshot:
 
 ```bash
 things-agent lists
@@ -226,13 +226,13 @@ things-agent tasks --query "<keyword>"
 things-agent search --query "<keyword>" --list "<localized-list>"
 ```
 
-This keeps audit workflows safe while respecting the no-direct-database rule.
+This keeps audit workflows safe while respecting the no-direct-database rule for agents.
 
 ### Useful Commands
 
 | Command group | Commands | Notes |
 | --- | --- | --- |
-| Session and backup | `session-start`, `backup [--query <text>] [--settle <duration>]`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `backup` is a DB checkpoint by default and only writes a scoped state manifest when `--query` is used; `--settle` lets the agent wait longer before quiescing Things so very recent writes are captured; `restore` creates a pre-restore backup, quiesces Things, verifies files, can relaunch Things offline with macOS `sandbox-exec -n no-network`, and emits a structured journal for the agent |
+| Session and backup | `session-start`, `backup [--settle <duration>]`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `backup` writes a package snapshot into the official `ThingsData-*/Backups` folder; `--settle` lets the agent wait longer before quiescing Things so very recent writes are captured; `restore` creates a pre-restore backup, swaps the package snapshot, verifies the copied database file, clears local sync metadata before relaunch, can relaunch Things offline, and emits a structured journal for the agent |
 | Core listing/search | `areas`, `lists`, `projects [--json]`, `tasks [--list <name>] [--query <text>] [--json]`, `search --query <text> [--list <name>] [--json]`, `show-task (--name|--id) [--with-child-tasks] [--json]` | `areas` lists area entities; `lists` lists areas plus built-in Things lists; `--list` is a generic Things list filter that may target a built-in list or an area; `--json` is intended for agent consumption |
 | Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task --area <name>` or `add-task --project <name>`, `edit-task (--name|--id)`, `delete-task (--name|--id)`, `complete-task (--name|--id)`, `uncomplete-task (--name|--id)` | Standard to-do operations with explicit destination on create; `--checklist-items` creates native checklist |
@@ -260,7 +260,10 @@ Reordering notes:
 - Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` or `--to-heading-id` may return `ok` even when nothing changes.
 - For now, create headings manually in Things, then return to the CLI for tasks, tags, notes, dates, and other verified operations.
 - No stable backend is available yet for checklist-item reorder or sidebar area reorder.
-- `restore --network-isolation sandbox-no-network` is the recommended DB restore path, because official Things guidance requires keeping Things offline on the first launch after restore.
+- `restore` now follows the official package-swap model in `ThingsData-*/Backups` instead of replaying the live WAL/SHM trio.
+- `restore --network-isolation sandbox-no-network` remains the safest DB restore path, because official Things guidance requires keeping Things offline on the first launch after restore.
+- `restore` clears the local sync metadata table before the first relaunch so the restored package is not immediately re-trashed by pending sync state.
+- The SQLite step is an internal restore implementation detail only; normal task/project/tag operations still go through AppleScript or the official Things URL Scheme.
 - `--reopen-online` is operationally convenient, but it is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
 - For very recent writes, prefer `backup --settle 10s` or more before relying on a DB restore checkpoint.
 

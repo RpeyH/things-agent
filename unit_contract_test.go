@@ -30,6 +30,8 @@ func TestUnitContracts(t *testing.T) {
 		}
 
 		for _, name := range []string{
+			"snapshot-state",
+			"restore-state",
 			"add-list",
 			"edit-list",
 			"delete-list",

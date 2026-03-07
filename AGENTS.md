@@ -14,6 +14,7 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 
 - The agent must **never** interact directly with the Things database (`.thingsdatabase`).
 - All operations must go through controlled AppleScript calls exposed by the CLI.
+- Internal CLI restore code may use a narrowly scoped SQLite step to clear local sync metadata after a package swap; this exception is for CLI implementation only, never for agent-authored ad hoc access.
 
 ## Strict CLI-Only Execution Rule
 
@@ -60,8 +61,8 @@ The agent should treat this table as the current command surface of the CLI.
 | `things-agent --help` / `things-agent help` | Show command help | no | Use first when uncertain |
 | `things-agent version` | Print CLI version | no | Health check |
 | `things-agent session-start` | Create session backup + retention cleanup | yes | First command in a new session |
-| `things-agent backup [--query <text>] [--settle <duration>]` | Create backup manually | yes | DB checkpoint by default; `--query` also saves a scoped state manifest; `--settle` waits before quiescing Things |
-| `things-agent restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]` | Restore a backup | yes | Critical operation; creates a pre-restore backup, quiesces Things, verifies files, and can relaunch Things offline with macOS `sandbox-exec -n no-network` |
+| `things-agent backup [--settle <duration>]` | Create backup manually | yes | DB checkpoint; `--settle` waits before quiescing Things |
+| `things-agent restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]` | Restore a backup | yes | Critical operation; creates a pre-restore backup, swaps the package snapshot from `ThingsData-*/Backups`, verifies the copied database file, clears local sync metadata before relaunch, and can relaunch Things offline with macOS `sandbox-exec -n no-network` |
 | `things-agent restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]` | Validate restore readiness without mutating live files | no | Read operation for restore safety |
 | `things-agent restore list [--json]` | List available snapshots | no | Read operation for restore inventory |
 | `things-agent restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | Verify that live files match a snapshot | no | Read operation with per-file verification details |
@@ -122,7 +123,9 @@ The agent should treat this table as the current command surface of the CLI.
 - Official Things documentation exposes heading creation through Shortcuts and the macOS UI, but this CLI does not have a reliable headless heading backend yet.
 - Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` may return `ok` even when nothing changes.
 - For now, create headings manually in Things, then return to the CLI for tasks, tags, notes, dates, and other verified operations.
-- `restore --network-isolation sandbox-no-network` is the recommended DB restore path, because official Things guidance requires keeping Things offline for the first launch after restore.
+- `restore` now follows the official package-swap model from `ThingsData-*/Backups`, instead of replaying the live SQLite trio in place.
+- `restore --network-isolation sandbox-no-network` remains the safest DB restore path, because official Things guidance requires keeping Things offline for the first launch after restore.
+- `restore` clears the local sync metadata table before the first relaunch so the restored package is not immediately re-trashed by pending sync state.
 - `--reopen-online` is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
 
 ## Expected Operations to Implement / Document
@@ -170,11 +173,10 @@ The agent should treat this table as the current command surface of the CLI.
 ## Backup via CLI
 
 - Backup command in CLI is mandatory before critical state changes.
-- Backup must be written in `backups/` under the Things data directory.
+- Backup must be written in `Backups/` under the `ThingsData-*` directory.
 - Backup files must follow timestamp format `YYYY-MM-DD:HH-MM-SS`.
 - Keep at most **50** most recent backups.
 - Plain `backup` creates a DB checkpoint only.
-- `backup --query <text>` additionally saves a scoped state manifest for diagnostic and experimental workflows.
 - When Things is running, backup waits a short settle window before quiescing so very recent writes are more likely to be persisted into the checkpoint.
 - Use `backup --settle 10s` or more if the checkpoint must include very recent task/project edits that were just created via the CLI.
 

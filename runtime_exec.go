@@ -39,7 +39,7 @@ func backupIfNeeded(ctx context.Context, cfg *runtimeConfig) error {
 }
 
 func backupIfDestructive(ctx context.Context, cfg *runtimeConfig) error {
-	paths, err := newBackupExecutor(cfg).Create(ctx)
+	paths, err := newDestructiveBackupExecutor(cfg).Create(ctx)
 	if err != nil {
 		return fmt.Errorf("backup failed: %w", err)
 	}

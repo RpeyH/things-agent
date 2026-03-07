@@ -258,6 +258,16 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 	}
 	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "ok"})
 
+	if r.backups.packageMode() {
+		if err := clearRestoreSyncMetadata(filepath.Join(r.backups.dataDir, "main.sqlite")); err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "prepare-launch", Status: "failed", Error: err.Error()})
+			rollback, restoreErr := r.restoreFailure(ctx, preRestoreTS, preflight.AppRunning, fmt.Errorf("prepare restored snapshot %s for launch: %w", preflight.Timestamp, err))
+			journal.Rollback = rollback
+			return journal, restoreErr
+		}
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "prepare-launch", Status: "ok"})
+	}
+
 	if r.launchIsolated != nil {
 		actualSemantic, launchErr := r.launchIsolatedAndSmoke(ctx)
 		semanticReport := restoreSemanticVerification{
@@ -332,7 +342,7 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 	}
 	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reclose", Status: "ok"})
 
-	if !semanticReport.ComparedToManifest {
+	if !semanticReport.ComparedToManifest && !r.backups.packageMode() {
 		postLaunchVerification, err := r.Verify(ctx, preflight.Timestamp)
 		journal.PostLaunchVerification = &postLaunchVerification
 		if err != nil {
@@ -728,7 +738,7 @@ func verifySnapshotAgainstLive(dataDir string, snapshotFiles []string) error {
 func buildSnapshotVerification(dataDir string, snapshotFiles []string) (restoreVerificationReport, error) {
 	report := restoreVerificationReport{
 		Match:    true,
-		Complete: len(snapshotFiles) == 3,
+		Complete: len(snapshotFiles) > 0,
 		Files:    make([]restoreVerifiedFile, 0, len(snapshotFiles)),
 	}
 	var firstErr error

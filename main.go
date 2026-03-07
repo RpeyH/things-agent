@@ -10,10 +10,10 @@ import (
 
 const (
 	defaultBundleID   = "com.culturedcode.ThingsMac"
-	backupDirName     = "backups"
+	backupDirName     = "Backups"
 	backupTSFormat    = "2006-01-02:15-04-05"
 	maxBackupsToKeep  = 50
-	cliVersion        = "0.3.13"
+	cliVersion        = "0.3.14"
 	thingsDataPattern = "Library/Group Containers/*.com.culturedcode.ThingsMac/ThingsData-*/Things Database.thingsdatabase"
 )
 
@@ -44,8 +44,9 @@ func newRootCmd() *cobra.Command {
 		Use:           "things-agent",
 		SilenceErrors: false,
 		SilenceUsage:  true,
-		Short:         "Things CLI via AppleScript (no direct DB access)",
-		Long: `This CLI controls Things through AppleScript only.
+		Short:         "Things CLI via AppleScript with a safe restore harness",
+		Long: `This CLI controls Things through AppleScript for normal reads and writes.
+Restore uses an internal SQLite-backed package-swap harness.
 It creates a timestamped backup in YYYY-MM-DD:hh-mm-ss format
 before destructive delete actions, explicit backup commands, and restore.
 Restore creates a pre-restore backup,
@@ -80,8 +81,6 @@ quiesces Things, verifies restored files, and rolls back on failure.`,
 		newTagsCmd(),
 		newTasksCmd(),
 		newSearchCmd(),
-		newSnapshotStateCmd(),
-		newRestoreStateCmd(),
 		newShowTaskCmd(),
 		newAddTaskCmd(),
 		newAddProjectCmd(),

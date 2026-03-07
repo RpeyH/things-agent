@@ -20,7 +20,7 @@ func TestDocsSyncGate(t *testing.T) {
 		"add-task --area",
 		"add-task --project",
 		"restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network]",
-		"backup [--query <text>]",
+		"backup [--settle <duration>]",
 		"backup --settle 10s",
 		"add-project --name <name> --area <area>",
 		"add-area --name <name>",
@@ -81,6 +81,9 @@ func TestDocsSyncGate(t *testing.T) {
 	forbidden := []string{
 		"things-agent url add-json",
 		"restore --file",
+		"snapshot-state",
+		"restore-state",
+		"backup --query",
 		"add-list --name <name>",
 		"edit-list --name <name> --new-name <name>",
 		"delete-list --name <name>",

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type backupManager struct {
@@ -57,16 +60,32 @@ func (bm *backupManager) Create(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	var created []string
-	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
-		src := filepath.Join(bm.dataDir, base)
-		if _, err := os.Stat(src); err != nil {
-			continue
+	if bm.packageMode() {
+		dstDir := bm.snapshotDir(ts)
+		if err := os.MkdirAll(dstDir, 0o755); err != nil {
+			return nil, err
 		}
-		dst := filepath.Join(dir, base+"."+ts+".bak")
+		src := bm.livePrimaryDBPath()
+		if _, err := os.Stat(src); err != nil {
+			return nil, errors.New("no backupable database file found")
+		}
+		dst := filepath.Join(dstDir, "main.sqlite")
 		if err := bm.copyFn(src, dst); err != nil {
 			return nil, err
 		}
 		created = append(created, dst)
+	} else {
+		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+			src := filepath.Join(bm.dataDir, base)
+			if _, err := os.Stat(src); err != nil {
+				continue
+			}
+			dst := filepath.Join(dir, base+"."+ts+".bak")
+			if err := bm.copyFn(src, dst); err != nil {
+				return nil, err
+			}
+			created = append(created, dst)
+		}
 	}
 	if len(created) == 0 {
 		return nil, errors.New("no backupable database file found")
@@ -107,19 +126,13 @@ func (bm *backupManager) List(ctx context.Context) ([]backupSnapshot, error) {
 	}
 	snapshots := make([]backupSnapshot, 0, len(timestamps))
 	for _, ts := range timestamps {
-		files := make([]string, 0, 3)
-		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
-			candidate := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
-			if _, err := os.Stat(candidate); err == nil {
-				files = append(files, candidate)
-			} else if err != nil && !os.IsNotExist(err) {
-				return nil, err
-			}
+		files, err := bm.FilesForTimestamp(ctx, ts)
+		if err != nil {
+			return nil, err
 		}
-		sort.Strings(files)
 		snapshots = append(snapshots, backupSnapshot{
 			Timestamp: ts,
-			Complete:  len(files) == 3,
+			Complete:  len(files) > 0,
 			Files:     files,
 		})
 	}
@@ -147,6 +160,16 @@ func (bm *backupManager) Verify(ctx context.Context, ts string) (backupSnapshot,
 
 func (bm *backupManager) FilesForTimestamp(ctx context.Context, ts string) ([]string, error) {
 	_ = ctx
+	if bm.packageMode() {
+		candidate := filepath.Join(bm.snapshotDir(ts), "main.sqlite")
+		if _, err := os.Stat(candidate); err == nil {
+			return []string{candidate}, nil
+		} else if os.IsNotExist(err) {
+			return nil, fmt.Errorf("no file for timestamp %s", ts)
+		} else {
+			return nil, err
+		}
+	}
 	var paths []string
 	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
 		candidate := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
@@ -171,6 +194,23 @@ func (bm *backupManager) Restore(ctx context.Context, ts string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
+	if bm.packageMode() {
+		live := bm.dataDir
+		tmp := live + ".restoretmp"
+		if err := os.RemoveAll(tmp); err != nil {
+			return nil, err
+		}
+		if err := copyDir(filepath.Dir(files[0]), tmp); err != nil {
+			return nil, err
+		}
+		if err := os.RemoveAll(live); err != nil {
+			return nil, err
+		}
+		if err := os.Rename(tmp, live); err != nil {
+			return nil, err
+		}
+		return files, nil
+	}
 	for _, src := range files {
 		if err := bm.RestoreFile(ctx, src); err != nil {
 			return nil, err
@@ -181,6 +221,13 @@ func (bm *backupManager) Restore(ctx context.Context, ts string) ([]string, erro
 
 func (bm *backupManager) RestoreFile(ctx context.Context, path string) error {
 	_ = ctx
+	if bm.packageMode() {
+		if filepath.Base(path) != "main.sqlite" {
+			return fmt.Errorf("nom de backup invalide: %s", filepath.Base(path))
+		}
+		dst := bm.livePrimaryDBPath()
+		return bm.copyFn(path, dst)
+	}
 	base := filepath.Base(path)
 	var baseTarget string
 	if strings.HasPrefix(base, "main.sqlite.") {
@@ -209,16 +256,22 @@ func (bm *backupManager) prune(ctx context.Context, keep int) error {
 		return nil
 	}
 	for _, ts := range timestamps[keep:] {
-		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
-			target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
-			if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		if bm.packageMode() {
+			if err := os.RemoveAll(bm.snapshotDir(ts)); err != nil && !os.IsNotExist(err) {
 				return err
+			}
+		} else {
+			for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+				target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
+				if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+					return err
+				}
 			}
 		}
 		if err := os.Remove(bm.semanticSnapshotPath(ts)); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		if err := os.Remove(bm.stateSnapshotPath(ts)); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(filepath.Join(bm.backupPath(), "state."+ts+".json")); err != nil && !os.IsNotExist(err) {
 			return err
 		}
 	}
@@ -236,9 +289,6 @@ func (bm *backupManager) allTimestamps() ([]string, error) {
 	}
 	tsSet := map[string]struct{}{}
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
 		ts := extractTimestamp(e.Name())
 		if ts != "" {
 			tsSet[ts] = struct{}{}
@@ -253,15 +303,15 @@ func (bm *backupManager) allTimestamps() ([]string, error) {
 }
 
 func (bm *backupManager) backupPath() string {
-	return filepath.Join(bm.dataDir, backupDirName)
+	root := bm.dataDir
+	if bm.packageMode() {
+		root = filepath.Dir(bm.dataDir)
+	}
+	return filepath.Join(root, backupDirName)
 }
 
 func (bm *backupManager) semanticSnapshotPath(ts string) string {
 	return filepath.Join(bm.backupPath(), "manifest."+ts+".json")
-}
-
-func (bm *backupManager) stateSnapshotPath(ts string) string {
-	return filepath.Join(bm.backupPath(), "state."+ts+".json")
 }
 
 func (bm *backupManager) ensureBackupDir() (string, error) {
@@ -299,6 +349,15 @@ func (bm *backupManager) nextTimestamp() (string, error) {
 }
 
 func (bm *backupManager) timestampExists(ts string) (bool, error) {
+	if bm.packageMode() {
+		if _, err := os.Stat(bm.snapshotDir(ts)); err == nil {
+			return true, nil
+		} else if os.IsNotExist(err) {
+			return false, nil
+		} else {
+			return false, err
+		}
+	}
 	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
 		target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
 		if _, err := os.Stat(target); err == nil {
@@ -327,27 +386,6 @@ func (bm *backupManager) loadSemanticSnapshot(ts string) (backupSemanticSnapshot
 	var snapshot backupSemanticSnapshot
 	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return backupSemanticSnapshot{}, err
-	}
-	return snapshot, nil
-}
-
-func (bm *backupManager) writeStateSnapshot(ts string, snapshot thingsStateSnapshot) error {
-	path := bm.stateSnapshotPath(ts)
-	data, err := json.Marshal(snapshot)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func (bm *backupManager) loadStateSnapshot(ts string) (thingsStateSnapshot, error) {
-	data, err := os.ReadFile(bm.stateSnapshotPath(ts))
-	if err != nil {
-		return thingsStateSnapshot{}, err
-	}
-	var snapshot thingsStateSnapshot
-	if err := json.Unmarshal(data, &snapshot); err != nil {
-		return thingsStateSnapshot{}, err
 	}
 	return snapshot, nil
 }
@@ -393,6 +431,15 @@ func parseDate(v string) (time.Time, error) {
 
 func inferTimestamp(file string) string {
 	base := filepath.Base(file)
+	if base == "main.sqlite" {
+		parent := filepath.Base(filepath.Dir(file))
+		if strings.HasPrefix(parent, "snapshot.") && strings.HasSuffix(parent, ".thingsdatabase") {
+			return strings.TrimSuffix(strings.TrimPrefix(parent, "snapshot."), ".thingsdatabase")
+		}
+	}
+	if strings.HasPrefix(base, "snapshot.") && strings.HasSuffix(base, ".thingsdatabase") {
+		return strings.TrimSuffix(strings.TrimPrefix(base, "snapshot."), ".thingsdatabase")
+	}
 	candidates := []string{
 		"main.sqlite.",
 		"main.sqlite-shm.",
@@ -409,6 +456,58 @@ func inferTimestamp(file string) string {
 func extractTimestamp(file string) string {
 	base := filepath.Base(file)
 	return inferTimestamp(base)
+}
+
+func (bm *backupManager) packageMode() bool {
+	return strings.HasSuffix(strings.ToLower(filepath.Base(bm.dataDir)), ".thingsdatabase")
+}
+
+func (bm *backupManager) livePrimaryDBPath() string {
+	return filepath.Join(bm.dataDir, "main.sqlite")
+}
+
+func (bm *backupManager) snapshotDir(ts string) string {
+	return filepath.Join(bm.backupPath(), "snapshot."+ts+".thingsdatabase")
+}
+
+func clearRestoreSyncMetadata(dbPath string) error {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	stmts := []string{
+		"DELETE FROM BSSyncronyMetadata",
+		"DELETE FROM ThingsTouch_ExtensionCommandStore_Commands",
+		"DELETE FROM ThingsTouch_ExtensionCommandStore_Meta",
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(strings.ToLower(err.Error()), "no such table") {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode())
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return copyFile(path, target)
+	})
 }
 
 func copyFile(src, dst string) error {

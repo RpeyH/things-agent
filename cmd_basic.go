@@ -76,7 +76,6 @@ func normalizeChecklistInput(raw string) string {
 }
 
 func newBackupCmd() *cobra.Command {
-	var query string
 	var settle time.Duration
 	cmd := &cobra.Command{
 		Use:   "backup",
@@ -87,7 +86,7 @@ func newBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			exec := newBackupExecutorWithQuery(cfg, query)
+			exec := newBackupExecutor(cfg)
 			exec.settleDelay = settle
 			paths, err := exec.Create(ctx)
 			if err != nil {
@@ -99,7 +98,6 @@ func newBackupCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&query, "query", "", "Also save a scoped state manifest limited to area/project/task names containing this text")
 	cmd.Flags().DurationVar(&settle, "settle", backupSettleDelay, "Wait this long before quiescing Things so recent writes have time to persist")
 	return cmd
 }
