@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -75,7 +76,9 @@ func normalizeChecklistInput(raw string) string {
 }
 
 func newBackupCmd() *cobra.Command {
-	return &cobra.Command{
+	var query string
+	var settle time.Duration
+	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Create a Things DB backup",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -84,7 +87,9 @@ func newBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := newBackupExecutor(cfg).Create(ctx)
+			exec := newBackupExecutorWithQuery(cfg, query)
+			exec.settleDelay = settle
+			paths, err := exec.Create(ctx)
 			if err != nil {
 				return err
 			}
@@ -94,12 +99,18 @@ func newBackupCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&query, "query", "", "Also save a scoped state manifest limited to area/project/task names containing this text")
+	cmd.Flags().DurationVar(&settle, "settle", backupSettleDelay, "Wait this long before quiescing Things so recent writes have time to persist")
+	return cmd
 }
 
 func newRestoreCmd() *cobra.Command {
 	var timestamp string
 	var dryRun bool
 	var jsonOutput bool
+	var networkIsolation string
+	var offlineHold time.Duration
+	var reopenOnline bool
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Safely restore a backup timestamp (latest by default)",
@@ -109,7 +120,19 @@ func newRestoreCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			journal, err := newRestoreExecutor(cfg).Execute(ctx, timestamp, dryRun)
+			launchIsolated, err := newOfflineAppLaunch(networkIsolation)
+			if err != nil {
+				return err
+			}
+			if launchIsolated == nil && (offlineHold > 0 || reopenOnline) {
+				return errors.New("--offline-hold and --reopen-online require --network-isolation")
+			}
+			exec := newRestoreExecutor(cfg)
+			exec.launchIsolated = launchIsolated
+			exec.networkIsolation = strings.TrimSpace(networkIsolation)
+			exec.offlineHold = offlineHold
+			exec.reopenOnline = reopenOnline
+			journal, err := exec.Execute(ctx, timestamp, dryRun)
 			if err != nil {
 				return err
 			}
@@ -129,6 +152,9 @@ func newRestoreCmd() *cobra.Command {
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to restore (YYYY-MM-DD:HH-MM-SS)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Run restore preflight only without mutating live files")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
+	cmd.Flags().StringVar(&networkIsolation, "network-isolation", networkIsolationNone, "Launch Things under a network isolation mode after restore (none|sandbox-no-network)")
+	cmd.Flags().DurationVar(&offlineHold, "offline-hold", 0, "Keep Things running under network isolation for this duration before the command returns or relaunches online")
+	cmd.Flags().BoolVar(&reopenOnline, "reopen-online", false, "Quit the isolated Things app after --offline-hold and relaunch it normally with network access")
 	cmd.AddCommand(newRestoreListCmd(), newRestorePreflightCmd(), newRestoreVerifyCmd())
 	return cmd
 }
@@ -219,7 +245,8 @@ func newRestorePreflightCmd() *cobra.Command {
 }
 
 func newSessionStartCmd() *cobra.Command {
-	return &cobra.Command{
+	var settle time.Duration
+	cmd := &cobra.Command{
 		Use:   "session-start",
 		Short: "Create a session backup and prune old backups",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -228,7 +255,9 @@ func newSessionStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			paths, err := newBackupExecutor(cfg).Create(ctx)
+			exec := newBackupExecutor(cfg)
+			exec.settleDelay = settle
+			paths, err := exec.Create(ctx)
 			if err != nil {
 				return err
 			}
@@ -238,6 +267,8 @@ func newSessionStartCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().DurationVar(&settle, "settle", backupSettleDelay, "Wait this long before quiescing Things so recent writes have time to persist")
+	return cmd
 }
 
 func newListsCmd() *cobra.Command {

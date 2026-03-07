@@ -31,7 +31,11 @@ func newTestBackupExecutor(bm *backupManager, app appController, semantic func(c
 		semanticCheck:     semantic,
 		fullSemanticCheck: semantic,
 	}
-	return &backupExecutor{runtime: runtime, stateCheck: state}
+	return &backupExecutor{
+		runtime:          runtime,
+		stateCheck:       state,
+		captureManifests: true,
+	}
 }
 
 func TestBackupExecutorQuiescesRunningAppAndWritesManifest(t *testing.T) {
@@ -76,6 +80,31 @@ func TestBackupExecutorQuiescesRunningAppAndWritesManifest(t *testing.T) {
 	quitCalls, activateCalls := app.counts()
 	if quitCalls != 1 || activateCalls != 0 {
 		t.Fatalf("expected quiesce without explicit activate, got quit=%d activate=%d", quitCalls, activateCalls)
+	}
+}
+
+func TestBackupExecutorWaitsForSettleDelayBeforeQuiesceWhenAppRunning(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "live")
+
+	bm := newBackupManager(tmp)
+	app := &fakeAppController{running: []bool{true, true, false}}
+	exec := newTestBackupExecutor(bm, app, func(context.Context) (backupSemanticSnapshot, error) {
+		return backupSemanticSnapshot{}, nil
+	}, func(context.Context) (thingsStateSnapshot, error) {
+		return thingsStateSnapshot{SchemaVersion: 1}, nil
+	})
+	var slept []time.Duration
+	exec.settleDelay = 5 * time.Second
+	exec.runtime.sleep = func(d time.Duration) {
+		slept = append(slept, d)
+	}
+
+	if _, err := exec.Create(context.Background()); err != nil {
+		t.Fatalf("backup create failed: %v", err)
+	}
+	if len(slept) == 0 || slept[0] != exec.settleDelay {
+		t.Fatalf("expected settle delay sleep first, got %#v", slept)
 	}
 }
 

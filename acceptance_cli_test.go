@@ -102,10 +102,10 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 	})
 
-	t.Run("backup writes a state snapshot manifest", func(t *testing.T) {
+	t.Run("backup without query writes only the db backup trio", func(t *testing.T) {
 		runner := runnerFunc(func(_ context.Context, script string) (string, error) {
 			if strings.Contains(script, "state snapshot capture") {
-				return "A\tarea-1\tArea A", nil
+				t.Fatalf("backup without query should not capture a state manifest")
 			}
 			return "", nil
 		})
@@ -126,12 +126,47 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		if ts == "" {
 			t.Fatalf("expected backup timestamp in %q", stdout)
 		}
+		if _, err := os.Stat(filepath.Join(tmp, backupDirName, "state."+ts+".json")); !os.IsNotExist(err) {
+			t.Fatalf("expected no state snapshot manifest for plain backup, got err=%v", err)
+		}
+	})
+
+	t.Run("backup query scopes the saved state snapshot manifest", func(t *testing.T) {
+		runner := runnerFunc(func(_ context.Context, script string) (string, error) {
+			if strings.Contains(script, "state snapshot capture") {
+				if !strings.Contains(script, `set q to "Scope 20260307"`) {
+					t.Fatalf("expected scoped backup state snapshot, got %s", script)
+				}
+				return strings.Join([]string{
+					`S	active	full	structure`,
+					`A	area-1	Area Scope 20260307`,
+				}, "\n"), nil
+			}
+			return "", nil
+		})
+		tmp := setupTestRuntimeWithDB(t, runner)
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "backup", "--query", "Scope 20260307")
+		})
+		if err != nil {
+			t.Fatalf("expected scoped backup to succeed: %v", err)
+		}
+
+		lines := strings.Fields(strings.TrimSpace(stdout))
+		if len(lines) == 0 {
+			t.Fatalf("expected backup paths on stdout, got %q", stdout)
+		}
+		ts := inferTimestamp(lines[0])
+		if ts == "" {
+			t.Fatalf("expected backup timestamp in %q", stdout)
+		}
 		data, err := os.ReadFile(filepath.Join(tmp, backupDirName, "state."+ts+".json"))
 		if err != nil {
-			t.Fatalf("expected state snapshot manifest, read failed: %v", err)
+			t.Fatalf("expected scoped state snapshot manifest, read failed: %v", err)
 		}
-		if !strings.Contains(string(data), `"areas"`) || !strings.Contains(string(data), `"Area A"`) {
-			t.Fatalf("unexpected state snapshot manifest: %s", string(data))
+		if !strings.Contains(string(data), `"scope":"active"`) || !strings.Contains(string(data), `"Area Scope 20260307"`) {
+			t.Fatalf("unexpected scoped state snapshot manifest: %s", string(data))
 		}
 	})
 
@@ -207,6 +242,120 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		}
 		if !strings.Contains(strings.Join(kinds, ","), "rename-area") || !strings.Contains(strings.Join(kinds, ","), "update-project-notes") || !strings.Contains(strings.Join(kinds, ","), "set-project-tags") || !strings.Contains(strings.Join(kinds, ","), "create-task") {
 			t.Fatalf("unexpected dry-run actions: %#v", payload.Actions)
+		}
+	})
+
+	t.Run("restore-state applies the surgical plan and verifies convergence", func(t *testing.T) {
+		target := thingsStateSnapshot{
+			SchemaVersion: 1,
+			Areas:         []thingsStateArea{{ID: "area-1", Name: "Area A"}},
+			Projects: []thingsStateProject{{
+				ID:     "project-1",
+				Name:   "Project A",
+				AreaID: "area-1",
+				Area:   "Area A",
+				Notes:  "target notes",
+				Tags:   []string{"tag-a"},
+			}},
+			Tasks: []thingsStateTask{{
+				ID:        "task-1",
+				Name:      "Task A",
+				AreaID:    "area-1",
+				Area:      "Area A",
+				ProjectID: "project-1",
+				Project:   "Project A",
+				Due:       "2026-03-07 00:00:00",
+				Deadline:  "2026-03-08 00:00:00",
+				Notes:     "target task",
+				Tags:      []string{"tag-a"},
+			}},
+		}
+		stateSnapshots := []string{
+			strings.Join([]string{
+				`A	area-1	Area Renamed`,
+				`P	project-1	Project A	open	area-1	Area Renamed	current notes	tag-b`,
+			}, "\n"),
+			strings.Join([]string{
+				`A	area-1	Area Renamed`,
+				`P	project-1	Project A	open	area-1	Area Renamed	current notes	tag-b`,
+			}, "\n"),
+			strings.Join([]string{
+				`A	area-1	Area A`,
+				`P	project-1	Project A	open	area-1	Area A	current notes	tag-b`,
+			}, "\n"),
+			strings.Join([]string{
+				`A	area-1	Area A`,
+				`P	project-1	Project A	open	area-1	Area A	target notes	tag-a`,
+			}, "\n"),
+			strings.Join([]string{
+				`A	area-1	Area A`,
+				`P	project-1	Project A	open	area-1	Area A	target notes	tag-a`,
+				`T	task-1	Task A	open	area-1	Area A	project-1	Project A	2026-03-07 00:00:00	2026-03-08 00:00:00	target task	tag-a`,
+			}, "\n"),
+		}
+		stateCall := 0
+		runner := runnerFunc(func(_ context.Context, script string) (string, error) {
+			if strings.Contains(script, "return running") {
+				return "false", nil
+			}
+			if strings.Contains(script, "state snapshot capture") {
+				if stateCall >= len(stateSnapshots) {
+					return stateSnapshots[len(stateSnapshots)-1], nil
+				}
+				out := stateSnapshots[stateCall]
+				stateCall++
+				return out, nil
+			}
+			if strings.Contains(script, `repeat with l in every list`) && strings.Contains(script, `repeat with t in every to do`) {
+				return "", nil
+			}
+			if strings.Contains(script, `make new area`) {
+				return "area-1", nil
+			}
+			if strings.Contains(script, `make new project`) {
+				return "project-1", nil
+			}
+			if strings.Contains(script, `make new «class tstk»`) {
+				return "task-1", nil
+			}
+			return "ok", nil
+		})
+		tmp := setupTestRuntimeWithDB(t, runner)
+
+		bm := newBackupManager(tmp)
+		if _, err := bm.ensureBackupDir(); err != nil {
+			t.Fatalf("ensureBackupDir failed: %v", err)
+		}
+		if err := bm.writeStateSnapshot("2026-03-07:10-20-20", target); err != nil {
+			t.Fatalf("writeStateSnapshot failed: %v", err)
+		}
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore-state", "--timestamp", "2026-03-07:10-20-20", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected restore-state apply to succeed: %v", err)
+		}
+
+		var payload struct {
+			Applied bool `json:"applied"`
+			Actions []struct {
+				Kind string `json:"kind"`
+			} `json:"actions"`
+			Verification struct {
+				OK               bool `json:"ok"`
+				RemainingActions int  `json:"remaining_actions"`
+			} `json:"verification"`
+			PreApplyBackupTimestamp string `json:"pre_apply_backup_timestamp"`
+		}
+		if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+			t.Fatalf("expected restore-state JSON, got %q (%v)", stdout, err)
+		}
+		if !payload.Applied || !payload.Verification.OK || payload.Verification.RemainingActions != 0 {
+			t.Fatalf("unexpected restore-state apply payload: %#v", payload)
+		}
+		if payload.PreApplyBackupTimestamp == "" {
+			t.Fatalf("expected pre-apply backup timestamp in payload: %#v", payload)
 		}
 	})
 
@@ -773,6 +922,69 @@ func TestAcceptanceCLIContracts(t *testing.T) {
 		semantic, ok := payload["semantic_verification"].(map[string]any)
 		if !ok || semantic["ok"] != true {
 			t.Fatalf("expected semantic verification in restore journal, got %#v", payload["semantic_verification"])
+		}
+	})
+
+	t.Run("restore supports network isolation launch and online relaunch", func(t *testing.T) {
+		runningStates := []string{"false", "false", "true", "true", "false"}
+		runner := runnerFunc(func(_ context.Context, script string) (string, error) {
+			switch {
+			case strings.Contains(script, "return running"):
+				if len(runningStates) == 0 {
+					return "false", nil
+				}
+				state := runningStates[0]
+				if len(runningStates) > 1 {
+					runningStates = runningStates[1:]
+				}
+				return state, nil
+			case strings.Contains(script, "quit"):
+				return "ok", nil
+			case strings.Contains(script, "activate"):
+				return "ok", nil
+			case strings.Contains(script, `set end of outLines to ("L" & tab & ((count of lists) as string))`):
+				return "L\t2\nP\t1\nT\t3", nil
+			}
+			return "", nil
+		})
+		tmp := setupTestRuntimeWithDB(t, runner)
+
+		origOfflineLauncher := newOfflineAppLaunch
+		newOfflineAppLaunch = func(mode string) (offlineAppLaunchFunc, error) {
+			if mode != networkIsolationSandboxNoNetwork {
+				t.Fatalf("unexpected network isolation mode %q", mode)
+			}
+			return func(context.Context, string) error { return nil }, nil
+		}
+		t.Cleanup(func() {
+			newOfflineAppLaunch = origOfflineLauncher
+		})
+
+		bm := newBackupManager(tmp)
+		created, err := bm.Create(context.Background())
+		if err != nil {
+			t.Fatalf("seed snapshot: %v", err)
+		}
+		ts := inferTimestamp(created[0])
+		writeLiveDBSet(t, tmp, "after")
+
+		stdout, err := captureStdout(t, func() error {
+			return executeAcceptanceRoot(t, "restore", "--timestamp", ts, "--network-isolation", networkIsolationSandboxNoNetwork, "--offline-hold", "1ms", "--reopen-online", "--json")
+		})
+		if err != nil {
+			t.Fatalf("expected isolated restore to succeed: %v", err)
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+			t.Fatalf("decode isolated restore json: %v\nstdout=%q", err, stdout)
+		}
+		if payload["network_isolation"] != networkIsolationSandboxNoNetwork || payload["relaunched_online"] != true {
+			t.Fatalf("unexpected isolated restore payload: %#v", payload)
+		}
+		semantic, ok := payload["semantic_verification"].(map[string]any)
+		if !ok || semantic["ok"] != true {
+			t.Fatalf("expected offline smoke verification in restore payload, got %#v", payload["semantic_verification"])
 		}
 	})
 }

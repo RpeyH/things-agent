@@ -5,15 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
+const backupSettleDelay = 5 * time.Second
+
 type backupExecutor struct {
-	runtime     *restoreExecutor
-	healthCheck func(context.Context) (backupSemanticSnapshot, error)
-	stateCheck  func(context.Context) (thingsStateSnapshot, error)
+	runtime          *restoreExecutor
+	healthCheck      func(context.Context) (backupSemanticSnapshot, error)
+	stateCheck       func(context.Context) (thingsStateSnapshot, error)
+	stateQuery       string
+	captureManifests bool
+	settleDelay      time.Duration
 }
 
 func newBackupExecutor(cfg *runtimeConfig) *backupExecutor {
+	return newBackupExecutorWithQuery(cfg, "")
+}
+
+func newBackupExecutorWithQuery(cfg *runtimeConfig, query string) *backupExecutor {
+	query = strings.TrimSpace(query)
 	bundleID := cfg.bundleID
 	if bundleID == "" {
 		bundleID = defaultBundleID
@@ -28,11 +39,23 @@ func newBackupExecutor(cfg *runtimeConfig) *backupExecutor {
 	runtime.semanticCheck = newScriptSemanticSnapshotter(bundleID, runner).Snapshot
 	runtime.semanticTimeout = restoreFullSemanticTimeout
 	runtime.backups = newBackupManager(cfg.dataDir)
-	return &backupExecutor{
-		runtime:     runtime,
-		healthCheck: newScriptSemanticHealthSnapshotter(bundleID, runner).Snapshot,
-		stateCheck:  newScriptStateSnapshotter(bundleID, runner).Snapshot,
+	exec := &backupExecutor{
+		runtime:          runtime,
+		stateQuery:       query,
+		captureManifests: false,
+		settleDelay:      backupSettleDelay,
 	}
+	if query != "" {
+		exec.healthCheck = newScriptSemanticHealthSnapshotter(bundleID, runner).Snapshot
+		exec.stateCheck = newScriptStateSnapshotterWithQuery(bundleID, runner, query).Snapshot
+		exec.captureManifests = true
+	}
+	return exec
+}
+
+func newDestructiveBackupExecutor(cfg *runtimeConfig) *backupExecutor {
+	exec := newBackupExecutorWithQuery(cfg, "")
+	return exec
 }
 
 func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error) {
@@ -58,6 +81,13 @@ func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error)
 		reopened = true
 	}()
 
+	if wasRunning && b.settleDelay > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		b.runtime.sleep(b.settleDelay)
+	}
+
 	if err := b.runtime.quiesce(ctx, wasRunning); err != nil {
 		return nil, fmt.Errorf("quiesce before backup: %w", err)
 	}
@@ -76,16 +106,18 @@ func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error)
 		return paths, errors.New("backup created but timestamp could not be inferred")
 	}
 
-	semantic, state, err := b.captureBackupManifests(ctx, wasRunning)
-	if err != nil {
-		return paths, fmt.Errorf("backup created but state manifests failed: %w", err)
-	}
+	if b.captureManifests {
+		semantic, state, err := b.captureBackupManifests(ctx, wasRunning)
+		if err != nil {
+			return paths, fmt.Errorf("backup created but state manifests failed: %w", err)
+		}
 
-	if err := b.runtime.backups.writeSemanticSnapshot(timestamp, semantic); err != nil {
-		return paths, fmt.Errorf("backup created but semantic snapshot save failed: %w", err)
-	}
-	if err := b.runtime.backups.writeStateSnapshot(timestamp, state); err != nil {
-		return paths, fmt.Errorf("backup created but state snapshot save failed: %w", err)
+		if err := b.runtime.backups.writeSemanticSnapshot(timestamp, semantic); err != nil {
+			return paths, fmt.Errorf("backup created but semantic snapshot save failed: %w", err)
+		}
+		if err := b.runtime.backups.writeStateSnapshot(timestamp, state); err != nil {
+			return paths, fmt.Errorf("backup created but state snapshot save failed: %w", err)
+		}
 	}
 
 	if wasRunning {

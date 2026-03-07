@@ -65,6 +65,10 @@ type restoreExecutor struct {
 	backups             *backupManager
 	bundleID            string
 	app                 appController
+	launchIsolated      offlineAppLaunchFunc
+	networkIsolation    string
+	offlineHold         time.Duration
+	reopenOnline        bool
 	sleep               func(time.Duration)
 	pollInterval        time.Duration
 	stopTimeout         time.Duration
@@ -129,6 +133,9 @@ type restoreJournal struct {
 	Timestamp              string                       `json:"timestamp"`
 	DryRun                 bool                         `json:"dry_run"`
 	Outcome                string                       `json:"outcome"`
+	NetworkIsolation       string                       `json:"network_isolation,omitempty"`
+	OfflineHold            string                       `json:"offline_hold,omitempty"`
+	RelaunchedOnline       bool                         `json:"relaunched_online,omitempty"`
 	AppWasRunning          bool                         `json:"app_was_running"`
 	Preflight              restorePreflightReport       `json:"preflight"`
 	PreRestoreBackup       *restoreBackupRecord         `json:"pre_restore_backup,omitempty"`
@@ -181,6 +188,10 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 		RequestedTimestamp: strings.TrimSpace(timestamp),
 		DryRun:             dryRun,
 		Outcome:            "failed",
+		NetworkIsolation:   strings.TrimSpace(r.networkIsolation),
+	}
+	if r.offlineHold > 0 {
+		journal.OfflineHold = r.offlineHold.String()
 	}
 
 	preflight, err := r.Preflight(ctx, timestamp)
@@ -246,6 +257,41 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 		return journal, restoreErr
 	}
 	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "ok"})
+
+	if r.launchIsolated != nil {
+		actualSemantic, launchErr := r.launchIsolatedAndSmoke(ctx)
+		semanticReport := restoreSemanticVerification{
+			OK:              launchErr == nil,
+			Actual:          actualSemantic,
+			TemporaryLaunch: !preflight.AppRunning,
+		}
+		journal.SemanticVerification = &semanticReport
+		if launchErr != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "offline-launch", Status: "failed", Error: launchErr.Error()})
+			rollback, restoreErr := r.restoreFailureWithAppState(ctx, preRestoreTS, preflight.AppRunning, false, fmt.Errorf("offline launch verify restored snapshot %s: %w", preflight.Timestamp, launchErr))
+			journal.Rollback = rollback
+			return journal, restoreErr
+		}
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "offline-launch", Status: "ok"})
+		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "offline-smoke", Status: "ok"})
+		if err := r.waitOfflineHold(ctx); err != nil {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "offline-hold", Status: "failed", Error: err.Error()})
+			return journal, fmt.Errorf("restore succeeded but offline hold failed: %w", err)
+		}
+		if r.offlineHold > 0 {
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "offline-hold", Status: "ok"})
+		}
+		if r.reopenOnline {
+			if err := r.reopenOnlineAfterIsolation(ctx); err != nil {
+				journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reopen-online", Status: "failed", Error: err.Error()})
+				return journal, fmt.Errorf("restore succeeded but online relaunch failed: %w", err)
+			}
+			journal.RelaunchedOnline = true
+			journal.Steps = append(journal.Steps, restoreJournalStep{Name: "reopen-online", Status: "ok"})
+		}
+		journal.Outcome = "restored"
+		return journal, nil
+	}
 
 	actualSemantic, err := r.semanticCheckForRestore(ctx, preflight.Timestamp)
 	if err != nil {
@@ -394,6 +440,26 @@ func (r *restoreExecutor) waitForStopped(ctx context.Context) error {
 	}
 }
 
+func (r *restoreExecutor) waitForRunning(ctx context.Context) error {
+	deadline := time.Now().Add(r.launchTimeout)
+	for {
+		running, err := r.app.IsRunning(ctx, r.bundleID)
+		if err != nil {
+			return err
+		}
+		if running {
+			return nil
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("Things did not launch within %s", r.launchTimeout)
+		}
+		r.sleep(r.pollInterval)
+	}
+}
+
 func (r *restoreExecutor) closeAfterTemporaryLaunch(ctx context.Context) error {
 	if err := r.app.Quit(ctx, r.bundleID); err != nil {
 		return err
@@ -416,6 +482,28 @@ func (r *restoreExecutor) activateWithin(ctx context.Context, label string) erro
 		return fmt.Errorf("%s timed out after %s", label, timeout)
 	}
 	return err
+}
+
+func (r *restoreExecutor) launchIsolatedWithin(ctx context.Context, label string) error {
+	timeout := r.launchTimeout
+	if timeout <= 0 {
+		timeout = restoreLaunchTimeout
+	}
+	launchCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := r.launchIsolated(launchCtx, r.bundleID); err != nil {
+		if errors.Is(launchCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("%s timed out after %s", label, timeout)
+		}
+		return err
+	}
+	if err := r.waitForRunning(launchCtx); err != nil {
+		if errors.Is(launchCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf("%s timed out after %s", label, timeout)
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *restoreExecutor) semanticCheckWithin(ctx context.Context, label string) (backupSemanticSnapshot, error) {
@@ -464,6 +552,34 @@ func (r *restoreExecutor) semanticCheckForRestore(ctx context.Context, timestamp
 		return r.fullSemanticCheckWithin(ctx, "semantic verify")
 	}
 	return r.semanticCheckWithin(ctx, "semantic verify")
+}
+
+func (r *restoreExecutor) launchIsolatedAndSmoke(ctx context.Context) (backupSemanticSnapshot, error) {
+	if err := r.launchIsolatedWithin(ctx, "offline launch"); err != nil {
+		return backupSemanticSnapshot{}, err
+	}
+	return r.semanticCheckWithin(ctx, "offline smoke verify")
+}
+
+func (r *restoreExecutor) waitOfflineHold(ctx context.Context) error {
+	if r.offlineHold <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(r.offlineHold)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (r *restoreExecutor) reopenOnlineAfterIsolation(ctx context.Context) error {
+	if err := r.quiesce(ctx, true); err != nil {
+		return err
+	}
+	return r.activateWithin(ctx, "reopen online")
 }
 
 func (r *restoreExecutor) waitForStableFiles(ctx context.Context) error {

@@ -138,8 +138,11 @@ things-agent session-start
 ```bash
 things-agent session-start
 things-agent backup
+things-agent backup --settle 10s
+things-agent backup --query "RestoreDB"
 things-agent areas
 things-agent restore list --json
+things-agent restore --timestamp "2026-03-07:14-45-09" --network-isolation sandbox-no-network --json
 things-agent tasks --list "À classer"
 things-agent tasks --list "À classer" --json
 things-agent search --query "Wagner"
@@ -229,7 +232,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule.
 
 | Command group | Commands | Notes |
 | --- | --- | --- |
-| Session and backup | `session-start`, `backup`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `restore` creates a pre-restore backup, quiesces Things, verifies files, rolls back on failure, and can emit a structured journal for the agent; auto-backups on ordinary writes are disabled |
+| Session and backup | `session-start`, `backup [--query <text>] [--settle <duration>]`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `backup` is a DB checkpoint by default and only writes a scoped state manifest when `--query` is used; `--settle` lets the agent wait longer before quiescing Things so very recent writes are captured; `restore` creates a pre-restore backup, quiesces Things, verifies files, can relaunch Things offline with macOS `sandbox-exec -n no-network`, and emits a structured journal for the agent |
 | Core listing/search | `areas`, `lists`, `projects [--json]`, `tasks [--list <name>] [--query <text>] [--json]`, `search --query <text> [--list <name>] [--json]`, `show-task (--name|--id) [--with-child-tasks] [--json]` | `areas` lists area entities; `lists` lists areas plus built-in Things lists; `--list` is a generic Things list filter that may target a built-in list or an area; `--json` is intended for agent consumption |
 | Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task --area <name>` or `add-task --project <name>`, `edit-task (--name|--id)`, `delete-task (--name|--id)`, `complete-task (--name|--id)`, `uncomplete-task (--name|--id)` | Standard to-do operations with explicit destination on create; `--checklist-items` creates native checklist |
@@ -257,6 +260,9 @@ Reordering notes:
 - Runtime validation showed that `things:///json` project updates did not create visible headings, private JSON read paths did not expose headings, and `move-task --to-heading` or `--to-heading-id` may return `ok` even when nothing changes.
 - For now, create headings manually in Things, then return to the CLI for tasks, tags, notes, dates, and other verified operations.
 - No stable backend is available yet for checklist-item reorder or sidebar area reorder.
+- `restore --network-isolation sandbox-no-network` is the recommended DB restore path, because official Things guidance requires keeping Things offline on the first launch after restore.
+- `--reopen-online` is operationally convenient, but it is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
+- For very recent writes, prefer `backup --settle 10s` or more before relying on a DB restore checkpoint.
 
 ### URL Scheme API Mapping
 

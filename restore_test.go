@@ -335,6 +335,51 @@ func TestRestoreExecutorRunsSemanticVerificationAndRestoresClosedState(t *testin
 	}
 }
 
+func TestRestoreExecutorLaunchesOfflineAndRelaunchesOnline(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "before")
+
+	bm := newBackupManager(tmp)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+	writeLiveDBSet(t, tmp, "after")
+
+	app := &fakeAppController{running: []bool{false, false, true, true, false}}
+	exec := newTestRestoreExecutor(bm, app)
+	launchCalls := 0
+	exec.launchIsolated = func(context.Context, string) error {
+		launchCalls++
+		return nil
+	}
+	exec.networkIsolation = networkIsolationSandboxNoNetwork
+	exec.offlineHold = time.Millisecond
+	exec.reopenOnline = true
+	exec.semanticCheck = func(context.Context) (backupSemanticSnapshot, error) {
+		return testSemanticSnapshot(2, 1, 3), nil
+	}
+
+	journal, err := exec.Execute(context.Background(), targetTS, false)
+	if err != nil {
+		t.Fatalf("restore execute failed: %v", err)
+	}
+	if launchCalls != 1 {
+		t.Fatalf("expected one isolated launch, got %d", launchCalls)
+	}
+	if journal.NetworkIsolation != networkIsolationSandboxNoNetwork || !journal.RelaunchedOnline {
+		t.Fatalf("unexpected network isolation journal: %#v", journal)
+	}
+	if journal.SemanticVerification == nil || !journal.SemanticVerification.OK || journal.SemanticVerification.Actual.TasksCount != 3 {
+		t.Fatalf("unexpected offline smoke verification: %#v", journal.SemanticVerification)
+	}
+	quitCalls, activateCalls := app.counts()
+	if quitCalls != 1 || activateCalls != 1 {
+		t.Fatalf("expected one quit and one online activate, quit=%d activate=%d", quitCalls, activateCalls)
+	}
+}
+
 func TestRestoreExecutorRollsBackWhenSemanticVerificationFails(t *testing.T) {
 	tmp := t.TempDir()
 	writeLiveDBSet(t, tmp, "before")
