@@ -25,6 +25,9 @@ func TestScriptChildTaskListingAndShow(t *testing.T) {
 	if !strings.Contains(showWithout, "if false then") {
 		t.Fatalf("expected child-task block disabled: %s", showWithout)
 	}
+	if !strings.Contains(showWith, "if class of taskTags is text then") {
+		t.Fatalf("expected single-tag coercion guard: %s", showWith)
+	}
 }
 
 func TestScriptAddChildTaskOptionallySetsNotes(t *testing.T) {

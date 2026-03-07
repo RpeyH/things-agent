@@ -62,6 +62,32 @@ func TestParseShowTaskOutput(t *testing.T) {
 	}
 }
 
+func TestParseShowTaskOutputIgnoresChildTaskUnsupportedInNotes(t *testing.T) {
+	raw := strings.Join([]string{
+		"ID: task-2",
+		"Name: Task B",
+		"Type: selected to do",
+		"Statut: open",
+		"Due: ",
+		"Completed on: ",
+		"Created on: 2026-03-01 00:00:00",
+		"Tags: solo",
+		"Notes: line one",
+		"Child Tasks: not supported",
+	}, "\n")
+
+	item, err := parseShowTaskOutput(raw)
+	if err != nil {
+		t.Fatalf("parseShowTaskOutput failed: %v", err)
+	}
+	if item.Notes != "line one" {
+		t.Fatalf("unexpected notes contamination: %q", item.Notes)
+	}
+	if len(item.Tags) != 1 || item.Tags[0] != "solo" {
+		t.Fatalf("unexpected single tag parsing: %#v", item.Tags)
+	}
+}
+
 func TestReadCommandsEmitJSON(t *testing.T) {
 	t.Run("projects json", func(t *testing.T) {
 		fr := &fakeRunner{output: "project-1\tProject A\topen\n"}

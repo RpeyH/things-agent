@@ -90,6 +90,9 @@ func scriptShowTask(bundleID, taskName, taskID string, withChildTasks bool) stri
   set tagText to ""
   try
     set taskTags to tag names of t
+    if class of taskTags is text then
+      set taskTags to {taskTags}
+    end if
     repeat with i from 1 to count taskTags
       set tagLine to item i of taskTags
       if tagText is "" then

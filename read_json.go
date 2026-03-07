@@ -143,9 +143,13 @@ func parseShowTaskOutput(raw string) (readItem, error) {
 			inNotes = true
 			inChildTasks = false
 			noteLines = []string{strings.TrimPrefix(line, "Notes: ")}
-		case line == "Child Tasks:":
+		case strings.HasPrefix(line, "Child Tasks:"):
 			inNotes = false
-			inChildTasks = true
+			if line == "Child Tasks:" {
+				inChildTasks = true
+			} else {
+				inChildTasks = false
+			}
 		case inChildTasks:
 			childTask, ok := parseChildTaskLine(line)
 			if ok {
