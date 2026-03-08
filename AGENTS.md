@@ -7,6 +7,12 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 - Always treat this rule as top priority for this repository.
 - For each new interaction session touching this project, trigger an initial backup via:
   - `things-agent session-start`
+- Immediately after `session-start`, the agent must build a fresh read-only picture of Things by checking:
+  - areas with `things-agent areas`
+  - projects with `things-agent projects --json`
+  - today's tasks with `things-agent tasks --list "Today" --json`
+  - tasks in `À classer` with `things-agent tasks --list "À classer" --json`
+- If the Things UI is localized differently, the agent must first inspect `things-agent lists` and then use the exact localized names returned by the CLI for `Today` and `À classer`.
 - The CLI keeps at most **50 backups** at all times (oldest are removed after creating a new backup).
 - Required backup timestamp format: `YYYY-MM-DD:HH-MM-SS`.
 

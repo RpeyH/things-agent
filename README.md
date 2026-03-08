@@ -125,6 +125,17 @@ things-agent version
 things-agent session-start
 ```
 
+After `things-agent session-start`, the agent should immediately build a fresh read-only picture of Things before planning any work:
+
+```bash
+things-agent areas
+things-agent projects --json
+things-agent tasks --list "Today" --json
+things-agent tasks --list "À classer" --json
+```
+
+If your Things UI is localized differently, run `things-agent lists` first and then use the exact localized list names returned by the CLI for `Today` and `À classer`.
+
 ## Domain glossary
 
 - `area`: a user-managed Things area. High-level CRUD and move commands use `area`.
