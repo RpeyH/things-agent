@@ -81,21 +81,18 @@ func newBackupCmd() *cobra.Command {
 		Use:   "backup",
 		Short: "Create a Things DB backup",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			exec := newBackupExecutor(cfg)
-			exec.settleDelay = settle
-			paths, err := exec.Create(ctx)
-			if err != nil {
-				return err
-			}
-			for _, p := range paths {
-				fmt.Println(p)
-			}
-			return nil
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				exec := newBackupExecutor(cfg)
+				exec.settleDelay = settle
+				paths, err := exec.Create(ctx)
+				if err != nil {
+					return err
+				}
+				for _, p := range paths {
+					fmt.Println(p)
+				}
+				return nil
+			})
 		},
 	}
 	cmd.Flags().DurationVar(&settle, "settle", backupSettleDelay, "Wait this long before quiescing Things so recent writes have time to persist")
@@ -113,11 +110,6 @@ func newRestoreCmd() *cobra.Command {
 		Use:   "restore",
 		Short: "Safely restore a backup timestamp (latest by default)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
 			launchIsolated, err := newOfflineAppLaunch(networkIsolation)
 			if err != nil {
 				return err
@@ -125,26 +117,28 @@ func newRestoreCmd() *cobra.Command {
 			if launchIsolated == nil && (offlineHold > 0 || reopenOnline) {
 				return errors.New("--offline-hold and --reopen-online require --network-isolation")
 			}
-			exec := newRestoreExecutor(cfg)
-			exec.launchIsolated = launchIsolated
-			exec.networkIsolation = strings.TrimSpace(networkIsolation)
-			exec.offlineHold = offlineHold
-			exec.reopenOnline = reopenOnline
-			journal, err := exec.Execute(ctx, timestamp, dryRun)
-			if err != nil {
-				return err
-			}
-			if jsonOutput {
-				return writeJSON(journal)
-			}
-			if dryRun {
-				fmt.Printf("%s\tdry-run=true\tok=%t\n", journal.Timestamp, journal.Preflight.OK)
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				exec := newRestoreExecutor(cfg)
+				exec.launchIsolated = launchIsolated
+				exec.networkIsolation = strings.TrimSpace(networkIsolation)
+				exec.offlineHold = offlineHold
+				exec.reopenOnline = reopenOnline
+				journal, err := exec.Execute(ctx, timestamp, dryRun)
+				if err != nil {
+					return err
+				}
+				if jsonOutput {
+					return writeJSON(journal)
+				}
+				if dryRun {
+					fmt.Printf("%s\tdry-run=true\tok=%t\n", journal.Timestamp, journal.Preflight.OK)
+					return nil
+				}
+				for _, p := range journal.RestoredFiles {
+					fmt.Println(p)
+				}
 				return nil
-			}
-			for _, p := range journal.RestoredFiles {
-				fmt.Println(p)
-			}
-			return nil
+			})
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to restore (YYYY-MM-DD:HH-MM-SS)")
@@ -163,22 +157,19 @@ func newRestoreListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List restore snapshots",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			snapshots, err := newBackupManager(cfg.dataDir).List(ctx)
-			if err != nil {
-				return err
-			}
-			if jsonOutput {
-				return writeJSON(snapshots)
-			}
-			for _, snapshot := range snapshots {
-				fmt.Printf("%s\tkind=%s\tcomplete=%t\tfiles=%d\n", snapshot.Timestamp, snapshot.Kind, snapshot.Complete, len(snapshot.Files))
-			}
-			return nil
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				snapshots, err := newBackupManager(cfg.dataDir).List(ctx)
+				if err != nil {
+					return err
+				}
+				if jsonOutput {
+					return writeJSON(snapshots)
+				}
+				for _, snapshot := range snapshots {
+					fmt.Printf("%s\tkind=%s\tcomplete=%t\tfiles=%d\n", snapshot.Timestamp, snapshot.Kind, snapshot.Complete, len(snapshot.Files))
+				}
+				return nil
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
@@ -192,20 +183,17 @@ func newRestoreVerifyCmd() *cobra.Command {
 		Use:   "verify",
 		Short: "Verify that live files match a snapshot",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			payload, err := newRestoreExecutor(cfg).Verify(ctx, timestamp)
-			if jsonOutput {
-				if writeErr := writeJSON(payload); writeErr != nil {
-					return writeErr
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				payload, err := newRestoreExecutor(cfg).Verify(ctx, timestamp)
+				if jsonOutput {
+					if writeErr := writeJSON(payload); writeErr != nil {
+						return writeErr
+					}
+					return err
 				}
+				fmt.Printf("%s\tmatch=%t\tcomplete=%t\tfiles=%d\n", payload.Timestamp, payload.Match, payload.Complete, len(payload.Files))
 				return err
-			}
-			fmt.Printf("%s\tmatch=%t\tcomplete=%t\tfiles=%d\n", payload.Timestamp, payload.Match, payload.Complete, len(payload.Files))
-			return err
+			})
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to verify (YYYY-MM-DD:HH-MM-SS)")
@@ -221,20 +209,17 @@ func newRestorePreflightCmd() *cobra.Command {
 		Use:   "preflight",
 		Short: "Validate restore readiness without mutating live files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			payload, err := newRestoreExecutor(cfg).Preflight(ctx, timestamp)
-			if err != nil {
-				return err
-			}
-			if jsonOutput {
-				return writeJSON(payload)
-			}
-			fmt.Printf("%s\tok=%t\tcomplete=%t\tapp-running=%t\tstable=%t\n", payload.Timestamp, payload.OK, payload.Complete, payload.AppRunning, payload.LiveFilesStable)
-			return nil
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				payload, err := newRestoreExecutor(cfg).Preflight(ctx, timestamp)
+				if err != nil {
+					return err
+				}
+				if jsonOutput {
+					return writeJSON(payload)
+				}
+				fmt.Printf("%s\tok=%t\tcomplete=%t\tapp-running=%t\tstable=%t\n", payload.Timestamp, payload.OK, payload.Complete, payload.AppRunning, payload.LiveFilesStable)
+				return nil
+			})
 		},
 	}
 	cmd.Flags().StringVar(&timestamp, "timestamp", "", "Backup timestamp to validate (YYYY-MM-DD:HH-MM-SS)")
@@ -248,21 +233,18 @@ func newSessionStartCmd() *cobra.Command {
 		Use:   "session-start",
 		Short: "Create a session backup and prune old backups",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			exec := newSessionBackupExecutor(cfg)
-			exec.settleDelay = settle
-			paths, err := exec.Create(ctx)
-			if err != nil {
-				return err
-			}
-			for _, p := range paths {
-				fmt.Println(p)
-			}
-			return nil
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				exec := newSessionBackupExecutor(cfg)
+				exec.settleDelay = settle
+				paths, err := exec.Create(ctx)
+				if err != nil {
+					return err
+				}
+				for _, p := range paths {
+					fmt.Println(p)
+				}
+				return nil
+			})
 		},
 	}
 	cmd.Flags().DurationVar(&settle, "settle", backupSettleDelay, "Wait this long before quiescing Things so recent writes have time to persist")
@@ -274,12 +256,9 @@ func newListsCmd() *cobra.Command {
 		Use:   "lists",
 		Short: "List Things areas and built-in lists",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptAllLists(cfg.bundleID))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptAllLists(cfg.bundleID))
+			})
 		},
 	}
 }
@@ -289,12 +268,9 @@ func newAreasCmd() *cobra.Command {
 		Use:   "areas",
 		Short: "List Things areas",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptAllAreas(cfg.bundleID))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptAllAreas(cfg.bundleID))
+			})
 		},
 	}
 }
@@ -305,15 +281,12 @@ func newProjectsCmd() *cobra.Command {
 		Use:   "projects",
 		Short: "List projects",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptAllProjectsStructured(cfg.bundleID), parseProjectListJSON)
-			}
-			return runResult(ctx, cfg, scriptAllProjects(cfg.bundleID))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				if jsonOutput {
+					return runJSONResult(ctx, cfg, scriptAllProjectsStructured(cfg.bundleID), parseProjectListJSON)
+				}
+				return runResult(ctx, cfg, scriptAllProjects(cfg.bundleID))
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output structured JSON")
@@ -327,15 +300,12 @@ func newTasksCmd() *cobra.Command {
 		Use:   "tasks",
 		Short: "List tasks (optionally filtered)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptTasksStructured(cfg.bundleID, listName, query), parseTaskListJSON)
-			}
-			return runResult(ctx, cfg, scriptTasks(cfg.bundleID, listName, query))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				if jsonOutput {
+					return runJSONResult(ctx, cfg, scriptTasksStructured(cfg.bundleID, listName, query), parseTaskListJSON)
+				}
+				return runResult(ctx, cfg, scriptTasks(cfg.bundleID, listName, query))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&listName, "list", "", "Limit to a Things list or area")
@@ -351,18 +321,15 @@ func newSearchCmd() *cobra.Command {
 		Use:   "search",
 		Short: "Search tasks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
 			if strings.TrimSpace(query) == "" {
 				return errors.New("--query is required")
 			}
-			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptTasksStructured(cfg.bundleID, listName, query), parseTaskListJSON)
-			}
-			return runResult(ctx, cfg, scriptSearch(cfg.bundleID, listName, query))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				if jsonOutput {
+					return runJSONResult(ctx, cfg, scriptTasksStructured(cfg.bundleID, listName, query), parseTaskListJSON)
+				}
+				return runResult(ctx, cfg, scriptSearch(cfg.bundleID, listName, query))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&query, "query", "", "Search text")
