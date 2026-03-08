@@ -69,19 +69,17 @@ func newShowTaskCmd() *cobra.Command {
 		Use:   "show-task",
 		Short: "Show full details for a task or project",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			name, id, err = resolveEntitySelector(name, id)
 			if err != nil {
 				return err
 			}
-			if jsonOutput {
-				return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks), parseShowTaskJSON)
-			}
-			return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				if jsonOutput {
+					return runJSONResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks), parseShowTaskJSON)
+				}
+				return runResult(ctx, cfg, scriptShowTask(cfg.bundleID, name, id, withChildTasks))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Task or project name")

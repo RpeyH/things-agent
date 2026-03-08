@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -57,6 +56,13 @@ quiesces Things, verifies restored files, and rolls back on failure.`,
 		},
 	}
 
+	configureRootFlags(root)
+	addRootCommands(root)
+
+	return root
+}
+
+func configureRootFlags(root *cobra.Command) {
 	bundleIDDefault := strings.TrimSpace(config.bundleID)
 	if bundleIDDefault == "" {
 		bundleIDDefault = envOrDefault("THINGS_BUNDLE_ID", defaultBundleID)
@@ -70,7 +76,9 @@ quiesces Things, verifies restored files, and rolls back on failure.`,
 	root.PersistentFlags().StringVar(&config.bundleID, "bundle-id", bundleIDDefault, "Things app bundle id")
 	root.PersistentFlags().StringVar(&config.dataDir, "data-dir", dataDirDefault, "Things database path")
 	root.PersistentFlags().StringVar(&config.authToken, "auth-token", authTokenDefault, "Things URL Scheme auth token (Settings > General)")
+}
 
+func addRootCommands(root *cobra.Command) {
 	root.AddCommand(
 		newBackupCmd(),
 		newRestoreCmd(),
@@ -115,14 +123,6 @@ quiesces Things, verifies restored files, and rolls back on failure.`,
 		newMoveProjectCmd(),
 		newReorderProjectItemsCmd(),
 		newReorderAreaItemsCmd(),
-		&cobra.Command{
-			Use:   "version",
-			Short: "Show CLI version",
-			Run: func(cmd *cobra.Command, args []string) {
-				fmt.Fprintln(cmd.OutOrStdout(), "things", effectiveCLIVersion())
-			},
-		},
+		newVersionCmd(),
 	)
-
-	return root
 }
