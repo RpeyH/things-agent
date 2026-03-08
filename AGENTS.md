@@ -133,6 +133,8 @@ The agent should treat this table as the current command surface of the CLI.
 - `restore --network-isolation sandbox-no-network` remains the safest DB restore path, because official Things guidance requires keeping Things offline for the first launch after restore.
 - `restore` clears the local sync metadata table before the first relaunch so the restored package is not immediately re-trashed by pending sync state.
 - `--reopen-online` is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
+- After any successful restore, the agent must explicitly tell the user to verify the restored data first and then re-enable Things Cloud manually if they use sync.
+- The agent must not present Things Cloud reactivation as automatic or guaranteed by the CLI.
 
 ## Expected Operations to Implement / Document
 

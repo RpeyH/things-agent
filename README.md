@@ -278,6 +278,10 @@ Reordering notes:
 - `--reopen-online` is operationally convenient, but it is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
 - For very recent writes, prefer `backup --settle 10s` or more before relying on a DB restore checkpoint.
 
+After a successful restore, verify the restored data first.
+If you use Things Cloud, re-enable it manually in Things settings only after that verification step.
+The CLI does not re-enable Things Cloud for you, because doing so too early can overwrite the restored state.
+
 ## Backup policy
 
 The CLI uses one backup artifact format: an official Things package snapshot stored in `ThingsData-*/Backups`.
