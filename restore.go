@@ -156,6 +156,27 @@ type restoreSemanticVerification struct {
 	TemporaryLaunch    bool                    `json:"temporary_launch,omitempty"`
 }
 
+func newRestoreJournal(requestedTimestamp string, dryRun bool, networkIsolation string, offlineHold time.Duration) restoreJournal {
+	journal := restoreJournal{
+		RequestedTimestamp: strings.TrimSpace(requestedTimestamp),
+		DryRun:             dryRun,
+		Outcome:            "failed",
+		NetworkIsolation:   strings.TrimSpace(networkIsolation),
+	}
+	if offlineHold > 0 {
+		journal.OfflineHold = offlineHold.String()
+	}
+	return journal
+}
+
+func (j *restoreJournal) addStep(name, status string, err error) {
+	step := restoreJournalStep{Name: name, Status: status}
+	if err != nil {
+		step.Error = err.Error()
+	}
+	j.Steps = append(j.Steps, step)
+}
+
 func newRestoreExecutor(cfg *runtimeConfig) *restoreExecutor {
 	return &restoreExecutor{
 		backups:             newBackupManager(cfg.dataDir),
@@ -185,29 +206,21 @@ func (r *restoreExecutor) Restore(ctx context.Context, timestamp string) ([]stri
 }
 
 func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun bool) (restoreJournal, error) {
-	journal := restoreJournal{
-		RequestedTimestamp: strings.TrimSpace(timestamp),
-		DryRun:             dryRun,
-		Outcome:            "failed",
-		NetworkIsolation:   strings.TrimSpace(r.networkIsolation),
-	}
-	if r.offlineHold > 0 {
-		journal.OfflineHold = r.offlineHold.String()
-	}
+	journal := newRestoreJournal(timestamp, dryRun, r.networkIsolation, r.offlineHold)
 
 	preflight, err := r.Preflight(ctx, timestamp)
 	journal.Preflight = preflight
 	journal.Timestamp = preflight.Timestamp
 	journal.AppWasRunning = preflight.AppRunning
 	if err != nil {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "preflight", Status: "failed", Error: err.Error()})
+		journal.addStep("preflight", "failed", err)
 		return journal, err
 	}
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "preflight", Status: "ok"})
+	journal.addStep("preflight", "ok", nil)
 
 	if dryRun {
 		journal.Outcome = "dry-run"
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "dry-run", Status: "ok"})
+		journal.addStep("dry-run", "ok", nil)
 		return journal, nil
 	}
 
@@ -217,51 +230,41 @@ func (r *restoreExecutor) Execute(ctx context.Context, timestamp string, dryRun 
 		if !preflight.AppRunning {
 			stepName = "stable-files"
 		}
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: stepName, Status: stepStatus, Error: err.Error()})
+		journal.addStep(stepName, stepStatus, err)
 		return journal, err
 	}
 	if preflight.AppRunning {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "quiesce", Status: "ok"})
+		journal.addStep("quiesce", "ok", nil)
 	}
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "stable-files", Status: "ok"})
+	journal.addStep("stable-files", "ok", nil)
 
-	preRestoreBackup, err := r.backups.CreateWithMetadata(ctx, backupCreateMetadata{
-		Kind:          backupKindSafety,
-		SourceCommand: "restore",
-		Reason:        "pre-restore rollback checkpoint",
-	})
+	preRestoreBackup, preRestoreTS, err := r.createPreRestoreBackup(ctx)
 	if err != nil {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "failed", Error: err.Error()})
-		return journal, fmt.Errorf("pre-restore backup failed: %w", err)
-	}
-	preRestoreTS := inferTimestamp(preRestoreBackup[0])
-	if preRestoreTS == "" {
-		err := errors.New("pre-restore backup timestamp could not be inferred")
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "failed", Error: err.Error()})
+		journal.addStep("pre-restore-backup", "failed", err)
 		return journal, err
 	}
-	journal.PreRestoreBackup = &restoreBackupRecord{Timestamp: preRestoreTS, Kind: string(backupKindSafety), Files: preRestoreBackup}
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "pre-restore-backup", Status: "ok"})
+	journal.PreRestoreBackup = preRestoreBackup
+	journal.addStep("pre-restore-backup", "ok", nil)
 
 	restored, err := r.backups.Restore(ctx, preflight.Timestamp)
 	if err != nil {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore", Status: "failed", Error: err.Error()})
+		journal.addStep("restore", "failed", err)
 		rollback, restoreErr := r.restoreFailure(ctx, preRestoreTS, preflight.AppRunning, fmt.Errorf("restore snapshot %s: %w", preflight.Timestamp, err))
 		journal.Rollback = rollback
 		return journal, restoreErr
 	}
 	journal.RestoredFiles = restored
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "restore", Status: "ok"})
+	journal.addStep("restore", "ok", nil)
 
 	verification, err := r.Verify(ctx, preflight.Timestamp)
 	journal.Verification = &verification
 	if err != nil {
-		journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "failed", Error: err.Error()})
+		journal.addStep("verify", "failed", err)
 		rollback, restoreErr := r.restoreFailure(ctx, preRestoreTS, preflight.AppRunning, fmt.Errorf("verify restored snapshot %s: %w", preflight.Timestamp, err))
 		journal.Rollback = rollback
 		return journal, restoreErr
 	}
-	journal.Steps = append(journal.Steps, restoreJournalStep{Name: "verify", Status: "ok"})
+	journal.addStep("verify", "ok", nil)
 
 	if r.backups.packageMode() {
 		if err := clearRestoreSyncMetadata(filepath.Join(r.backups.dataDir, "main.sqlite")); err != nil {
@@ -654,6 +657,27 @@ func (r *restoreExecutor) quiesce(ctx context.Context, wasRunning bool) error {
 		}
 	}
 	return r.waitForStableFiles(ctx)
+}
+
+func (r *restoreExecutor) createPreRestoreBackup(ctx context.Context) (*restoreBackupRecord, string, error) {
+	files, err := r.backups.CreateWithMetadata(ctx, backupCreateMetadata{
+		Kind:          backupKindSafety,
+		SourceCommand: "restore",
+		Reason:        "pre-restore rollback checkpoint",
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("pre-restore backup failed: %w", err)
+	}
+	timestamp := inferTimestamp(files[0])
+	if timestamp == "" {
+		return nil, "", errors.New("pre-restore backup timestamp could not be inferred")
+	}
+	record := &restoreBackupRecord{
+		Timestamp: timestamp,
+		Kind:      string(backupKindSafety),
+		Files:     files,
+	}
+	return record, timestamp, nil
 }
 
 func (r *restoreExecutor) ensureBackupWritable() error {
