@@ -49,8 +49,8 @@ func TestBackupExecutorQuiescesRunningApp(t *testing.T) {
 	}
 
 	quitCalls, activateCalls := app.counts()
-	if quitCalls != 1 || activateCalls != 0 {
-		t.Fatalf("expected quiesce without explicit activate, got quit=%d activate=%d", quitCalls, activateCalls)
+	if quitCalls != 1 || activateCalls != 1 {
+		t.Fatalf("expected backup to restore app open state, got quit=%d activate=%d", quitCalls, activateCalls)
 	}
 }
 
@@ -95,5 +95,24 @@ func TestBackupExecutorReopensRunningAppWhenBackupCopyFails(t *testing.T) {
 	quitCalls, activateCalls := app.counts()
 	if quitCalls != 1 || activateCalls != 1 {
 		t.Fatalf("expected reopen after failure, got quit=%d activate=%d", quitCalls, activateCalls)
+	}
+}
+
+func TestBackupExecutorDoesNotOpenAppWhenInitiallyClosed(t *testing.T) {
+	tmp := t.TempDir()
+	writeLiveDBSet(t, tmp, "live")
+
+	bm := newBackupManager(tmp)
+	app := &fakeAppController{running: []bool{false}}
+	exec := newTestBackupExecutor(bm, app)
+
+	_, err := exec.Create(context.Background())
+	if err != nil {
+		t.Fatalf("backup failed: %v", err)
+	}
+
+	quitCalls, activateCalls := app.counts()
+	if quitCalls != 0 || activateCalls != 0 {
+		t.Fatalf("expected closed app to stay closed, got quit=%d activate=%d", quitCalls, activateCalls)
 	}
 }

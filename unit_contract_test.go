@@ -15,6 +15,8 @@ func TestUnitContracts(t *testing.T) {
 			"add-area",
 			"edit-area",
 			"delete-area",
+			"open",
+			"close",
 			"add-checklist-item",
 			"list-child-tasks",
 			"add-child-task",

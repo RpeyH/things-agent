@@ -74,11 +74,15 @@ func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error)
 	reopened := !wasRunning
 	quiesced := false
 	defer func() {
-		if err == nil || !wasRunning || !quiesced || reopened {
+		if !wasRunning || !quiesced || reopened {
 			return
 		}
 		if reopenErr := b.runtime.app.Activate(ctx, b.runtime.bundleID); reopenErr != nil {
-			err = fmt.Errorf("%w; reopen after backup failure: %v", err, reopenErr)
+			if err != nil {
+				err = fmt.Errorf("%w; reopen after backup failure: %v", err, reopenErr)
+			} else {
+				err = fmt.Errorf("backup succeeded but reopen failed: %w", reopenErr)
+			}
 			return
 		}
 		reopened = true
@@ -107,10 +111,6 @@ func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error)
 	timestamp := inferTimestamp(paths[0])
 	if timestamp == "" {
 		return paths, errors.New("backup created but timestamp could not be inferred")
-	}
-
-	if wasRunning {
-		reopened = true
 	}
 	return paths, nil
 }
