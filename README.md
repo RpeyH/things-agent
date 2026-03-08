@@ -243,7 +243,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule for
 
 | Command group | Commands | Notes |
 | --- | --- | --- |
-| Session and backup | `session-start`, `backup [--settle <duration>]`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `backup` writes a package snapshot into the official `ThingsData-*/Backups` folder; `--settle` lets the agent wait longer before quiescing Things so very recent writes are captured; `restore` creates a pre-restore backup, swaps the package snapshot, verifies the copied database file, clears local sync metadata before relaunch, can relaunch Things offline, and emits a structured journal for the agent |
+| Session and backup | `session-start`, `backup [--settle <duration>]`, `restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]`, `restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]`, `restore list [--json]`, `restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | `backup` writes a package snapshot into the official `ThingsData-*/Backups` folder; every snapshot also gets a small agent-readable index with `kind`, `created_at`, `source_command`, and `reason`; `--settle` lets the agent wait longer before quiescing Things so very recent writes are captured; `restore` creates a pre-restore safety backup, swaps the package snapshot, verifies the copied database file, clears local sync metadata before relaunch, can relaunch Things offline, and emits a structured journal for the agent |
 | Core listing/search | `areas`, `lists`, `projects [--json]`, `tasks [--list <name>] [--query <text>] [--json]`, `search --query <text> [--list <name>] [--json]`, `show-task (--name|--id) [--with-child-tasks] [--json]` | `areas` lists area entities; `lists` lists areas plus built-in Things lists; `--list` is a generic Things list filter that may target a built-in list or an area; `--json` is intended for agent consumption |
 | Tag entities | `tags list`, `tags search`, `tags add`, `tags edit`, `tags delete` | Manage Things tags directly |
 | Task lifecycle | `add-task --area <name>` or `add-task --project <name>`, `edit-task (--name|--id)`, `delete-task (--name|--id)`, `complete-task (--name|--id)`, `uncomplete-task (--name|--id)` | Standard to-do operations with explicit destination on create; `--checklist-items` creates native checklist |
@@ -277,6 +277,35 @@ Reordering notes:
 - The SQLite step is an internal restore implementation detail only; normal task/project/tag operations still go through AppleScript or the official Things URL Scheme.
 - `--reopen-online` is operationally convenient, but it is less safe than leaving Things offline and following the manual Things Cloud recovery steps from Cultured Code.
 - For very recent writes, prefer `backup --settle 10s` or more before relying on a DB restore checkpoint.
+
+## Backup policy
+
+The CLI uses one backup artifact format: an official Things package snapshot stored in `ThingsData-*/Backups`.
+The product distinction is in the backup `kind`, not in the snapshot format.
+
+- `session`: created by `things-agent session-start`; intended as the automatic checkpoint at the start of an agent session.
+- `explicit`: created by `things-agent backup`; this is the canonical user-facing checkpoint to restore intentionally.
+- `safety`: created automatically before critical operations such as `restore`; intended for rollback safety, not as the primary restore target.
+
+Each snapshot also gets a small JSON index file alongside the package snapshot.
+This index is agent-readable metadata, not a second restore engine.
+It records:
+
+- `timestamp`
+- `kind`
+- `created_at`
+- `source_command`
+- `reason`
+- `complete`
+- `files`
+
+Operationally:
+
+- prefer `explicit` backups when the user asks to restore a known checkpoint;
+- use `session` backups to return to the start of an agent session;
+- use `safety` backups for immediate rollback or debugging after a failed critical action.
+
+Retention is currently shared across all backup kinds: the CLI keeps the 50 most recent snapshots overall.
 
 ### URL Scheme API Mapping
 

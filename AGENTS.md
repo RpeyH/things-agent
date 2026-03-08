@@ -66,11 +66,11 @@ The agent should treat this table as the current command surface of the CLI.
 | --- | --- | --- | --- |
 | `things-agent --help` / `things-agent help` | Show command help | no | Use first when uncertain |
 | `things-agent version` | Print CLI version | no | Health check |
-| `things-agent session-start` | Create session backup + retention cleanup | yes | First command in a new session |
-| `things-agent backup [--settle <duration>]` | Create backup manually | yes | DB checkpoint; `--settle` waits before quiescing Things |
+| `things-agent session-start` | Create session backup + retention cleanup | yes | First command in a new session; creates a `session` backup kind |
+| `things-agent backup [--settle <duration>]` | Create backup manually | yes | DB checkpoint; creates an `explicit` backup kind; `--settle` waits before quiescing Things |
 | `things-agent restore [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--network-isolation sandbox-no-network] [--offline-hold <duration>] [--reopen-online] [--dry-run] [--json]` | Restore a backup | yes | Critical operation; creates a pre-restore backup, swaps the package snapshot from `ThingsData-*/Backups`, verifies the copied database file, clears local sync metadata before relaunch, and can relaunch Things offline with macOS `sandbox-exec -n no-network` |
 | `things-agent restore preflight [--timestamp <YYYY-MM-DD:HH-MM-SS>] [--json]` | Validate restore readiness without mutating live files | no | Read operation for restore safety |
-| `things-agent restore list [--json]` | List available snapshots | no | Read operation for restore inventory |
+| `things-agent restore list [--json]` | List available snapshots | no | Read operation for restore inventory; JSON includes backup index metadata such as `kind`, `created_at`, `source_command`, and `reason` |
 | `things-agent restore verify --timestamp <YYYY-MM-DD:HH-MM-SS> [--json]` | Verify that live files match a snapshot | no | Read operation with per-file verification details |
 | `things-agent areas` | List Things areas | no | Read operation |
 | `things-agent lists` | List Things areas and built-in lists | no | Read operation |
@@ -182,7 +182,13 @@ The agent should treat this table as the current command surface of the CLI.
 - Backup must be written in `Backups/` under the `ThingsData-*` directory.
 - Backup files must follow timestamp format `YYYY-MM-DD:HH-MM-SS`.
 - Keep at most **50** most recent backups.
-- Plain `backup` creates a DB checkpoint only.
+- All backup kinds use the same package snapshot format; only the backup metadata differs.
+- `session-start` creates a `session` backup kind for the start of an agent session.
+- Plain `backup` creates an `explicit` backup kind and is the preferred restore target for user-requested checkpoints.
+- Automatic rollback checkpoints create a `safety` backup kind.
+- Each snapshot also gets an agent-readable JSON index with `timestamp`, `kind`, `created_at`, `source_command`, `reason`, `complete`, and `files`.
+- The backup index is metadata only. It helps the agent choose the right snapshot, but it is not a separate restore mechanism.
+- Retention is currently shared across all backup kinds: the CLI keeps the 50 most recent snapshots overall.
 - When Things is running, backup waits a short settle window before quiescing so very recent writes are more likely to be persisted into the checkpoint.
 - Use `backup --settle 10s` or more if the checkpoint must include very recent task/project edits that were just created via the CLI.
 
