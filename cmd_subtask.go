@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -47,11 +48,7 @@ func newAddChecklistItemCmd() *cobra.Command {
 		Use:   "add-checklist-item",
 		Short: "Add a native checklist item to a task",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			taskName, taskID, err = resolveTaskParentSelector(taskName, taskID)
 			if err != nil {
 				return err
@@ -60,14 +57,13 @@ func newAddChecklistItemCmd() *cobra.Command {
 			if itemName == "" {
 				return errors.New("--name is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			token, err := requireAuthToken(cfg)
-			if err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptAppendChecklistByRef(cfg.bundleID, taskName, taskID, []string{itemName}, token))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				token, err := requireAuthToken(cfg)
+				if err != nil {
+					return err
+				}
+				return runResult(ctx, cfg, scriptAppendChecklistByRef(cfg.bundleID, taskName, taskID, []string{itemName}, token))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&taskName, "task", "", "Task name parent")
@@ -83,16 +79,14 @@ func newListChildTasksCmd() *cobra.Command {
 		Use:   "list-child-tasks",
 		Short: "List child tasks for a parent item",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
 			}
-			return runResult(ctx, cfg, scriptListChildTasks(cfg.bundleID, parentName, parentID))
+			return withRuntimeConfig(cmd, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptListChildTasks(cfg.bundleID, parentName, parentID))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
@@ -106,11 +100,7 @@ func newAddChildTaskCmd() *cobra.Command {
 		Use:   "add-child-task",
 		Short: "Add a child task under a parent item",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, err = resolveParentSelector(parentName, parentID)
 			if err != nil {
 				return err
@@ -120,10 +110,9 @@ func newAddChildTaskCmd() *cobra.Command {
 			if childTaskName == "" {
 				return errors.New("--name is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptAddChildTask(cfg.bundleID, parentName, parentID, childTaskName, notes))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptAddChildTask(cfg.bundleID, parentName, parentID, childTaskName, notes))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
@@ -141,11 +130,7 @@ func newEditChildTaskCmd() *cobra.Command {
 		Use:   "edit-child-task",
 		Short: "Edit a child task",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, childTaskName, childTaskIndex, err = resolveChildTaskMutationSelector(parentName, parentID, childTaskName, childTaskID, childTaskIndex)
 			if err != nil {
 				return err
@@ -155,10 +140,9 @@ func newEditChildTaskCmd() *cobra.Command {
 			if newName == "" && notes == "" {
 				return errors.New("provide --new-name and/or --notes")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptEditChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, newName, notes))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptEditChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, newName, notes))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
@@ -178,19 +162,14 @@ func newDeleteChildTaskCmd() *cobra.Command {
 		Use:   "delete-child-task",
 		Short: "Delete a child task",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, childTaskName, childTaskIndex, err = resolveChildTaskMutationSelector(parentName, parentID, childTaskName, childTaskID, childTaskIndex)
 			if err != nil {
 				return err
 			}
-			if err := backupIfDestructive(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptDeleteChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex))
+			return withWriteBackup(cmd, true, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptDeleteChildTask(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
@@ -208,19 +187,14 @@ func newCompleteChildTaskCmd() *cobra.Command {
 		Use:   "complete-child-task",
 		Short: "Mark child task as completed",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, childTaskName, childTaskIndex, err = resolveChildTaskMutationSelector(parentName, parentID, childTaskName, childTaskID, childTaskIndex)
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, true))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, true))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")
@@ -238,19 +212,14 @@ func newUncompleteChildTaskCmd() *cobra.Command {
 		Use:   "uncomplete-child-task",
 		Short: "Mark child task as uncompleted",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			parentName, parentID, childTaskName, childTaskIndex, err = resolveChildTaskMutationSelector(parentName, parentID, childTaskName, childTaskID, childTaskIndex)
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, false))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptSetChildTaskStatus(cfg.bundleID, parentName, parentID, childTaskName, childTaskID, childTaskIndex, false))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&parentName, "parent", "", "Parent item name")

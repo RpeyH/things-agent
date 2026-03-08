@@ -104,29 +104,23 @@ func newMoveTaskCmd() *cobra.Command {
 		Use:   "move-task",
 		Short: "Move a task to an area, project, or heading",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			taskID, err := resolveTaskID(ctx, cfg, name, id)
-			if err != nil {
-				return err
-			}
 			params, err := resolveMoveTaskDestination(toArea, toAreaID, toProject, toProjectID, toHeading, toHeadingID)
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			token, err := requireAuthToken(cfg)
-			if err != nil {
-				return err
-			}
-			params["auth-token"] = token
-			params["id"] = taskID
-			return runThingsURL(ctx, cfg, "update", params)
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				taskID, err := resolveTaskID(ctx, cfg, name, id)
+				if err != nil {
+					return err
+				}
+				token, err := requireAuthToken(cfg)
+				if err != nil {
+					return err
+				}
+				params["auth-token"] = token
+				params["id"] = taskID
+				return runThingsURL(ctx, cfg, "update", params)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Task name")
@@ -147,29 +141,23 @@ func newMoveProjectCmd() *cobra.Command {
 		Use:   "move-project",
 		Short: "Move a project to another area",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
-			projectID, err := resolveProjectID(ctx, cfg, name, id)
-			if err != nil {
-				return err
-			}
 			params, err := resolveMoveProjectDestination(toArea, toAreaID)
 			if err != nil {
 				return err
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			token, err := requireAuthToken(cfg)
-			if err != nil {
-				return err
-			}
-			params["auth-token"] = token
-			params["id"] = projectID
-			return runThingsURL(ctx, cfg, "update-project", params)
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				projectID, err := resolveProjectID(ctx, cfg, name, id)
+				if err != nil {
+					return err
+				}
+				token, err := requireAuthToken(cfg)
+				if err != nil {
+					return err
+				}
+				params["auth-token"] = token
+				params["id"] = projectID
+				return runThingsURL(ctx, cfg, "update-project", params)
+			})
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "Project name")
@@ -185,11 +173,7 @@ func newReorderProjectItemsCmd() *cobra.Command {
 		Use:   "reorder-project-items",
 		Short: "Reorder tasks inside a project (private Things backend)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			projectName, projectID, err = resolveEntitySelector(projectName, projectID)
 			if err != nil {
 				return err
@@ -198,10 +182,9 @@ func newReorderProjectItemsCmd() *cobra.Command {
 			if len(ids) == 0 {
 				return errors.New("--ids is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptReorderProjectItems(cfg.bundleID, projectName, projectID, ids))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptReorderProjectItems(cfg.bundleID, projectName, projectID, ids))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&projectName, "project", "", "Project name")
@@ -216,11 +199,7 @@ func newReorderAreaItemsCmd() *cobra.Command {
 		Use:   "reorder-area-items",
 		Short: "Reorder items inside an area (private Things backend)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			cfg, err := resolveRuntimeConfig(ctx)
-			if err != nil {
-				return err
-			}
+			var err error
 			areaName, areaID, err = resolveAreaSelector(areaName, areaID)
 			if err != nil {
 				return err
@@ -229,10 +208,9 @@ func newReorderAreaItemsCmd() *cobra.Command {
 			if len(ids) == 0 {
 				return errors.New("--ids is required")
 			}
-			if err := backupIfNeeded(ctx, cfg); err != nil {
-				return err
-			}
-			return runResult(ctx, cfg, scriptReorderAreaItems(cfg.bundleID, areaName, areaID, ids))
+			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+				return runResult(ctx, cfg, scriptReorderAreaItems(cfg.bundleID, areaName, areaID, ids))
+			})
 		},
 	}
 	cmd.Flags().StringVar(&areaName, "area", "", "Area name")
