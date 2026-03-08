@@ -7,7 +7,8 @@ This file defines operating rules for the **things-agent** repository (Things 3 
 - Always treat this rule as top priority for this repository.
 - For each new interaction session touching this project, trigger an initial backup via:
   - `things-agent session-start`
-- At the beginning of each session, the agent must also check the current date and the current day of week before planning work.
+- At the beginning of each session, the agent must also check the current date and the current day of week before planning work via:
+  - `things-agent date`
 - Immediately after `session-start`, the agent must build a fresh read-only picture of Things by checking:
   - areas with `things-agent areas`
   - projects with `things-agent projects --json`

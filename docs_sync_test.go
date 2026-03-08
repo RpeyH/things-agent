@@ -16,6 +16,7 @@ func TestDocsSyncGate(t *testing.T) {
 		"things-agent url json",
 		"things-agent restore list",
 		"things-agent restore verify",
+		"things-agent date",
 		"things-agent areas",
 		"add-task --area",
 		"add-task --project",

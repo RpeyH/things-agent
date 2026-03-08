@@ -123,6 +123,7 @@ ln -sf AGENTS.md CLAUDE.md
 # quick health check
 things-agent version
 things-agent session-start
+things-agent date
 ```
 
 After `things-agent session-start`, the agent should immediately build a fresh read-only picture of Things before planning any work:
@@ -135,6 +136,7 @@ things-agent tasks --list "À classer" --json
 ```
 
 If your Things UI is localized differently, run `things-agent lists` first and then use the exact localized list names returned by the CLI for `Today` and `À classer`.
+The canonical session date command is `things-agent date`, which prints the weekday, date, time, and timezone in one line.
 
 ## Domain glossary
 
@@ -149,6 +151,7 @@ If your Things UI is localized differently, run `things-agent lists` first and t
 
 ```bash
 things-agent session-start
+things-agent date
 things-agent backup
 things-agent backup --settle 10s
 things-agent areas
@@ -255,7 +258,7 @@ This keeps audit workflows safe while respecting the no-direct-database rule for
 | Tasks | `move-task (--name|--id)` | Move to an area or project; heading destinations are not reliable yet |
 | Child tasks | `list-child-tasks (--parent|--parent-id)`, `add-child-task (--parent|--parent-id)`, `edit-child-task (--id or --parent/--parent-id + --name/--index)`, `delete-child-task (--id or --parent/--parent-id + --name/--index)`, `complete-child-task (--id or --parent/--parent-id + --name/--index)`, `uncomplete-child-task (--id or --parent/--parent-id + --name/--index)`, `reorder-project-items (--project|--project-id)` | Explicit AppleScript child-task surface for projects; direct `--id` is supported for mutations; reorder uses a private Things backend |
 | URL Scheme bridge | `url add|update|add-project|update-project|show|search|version|json` | Direct mapping of Things URL Scheme |
-| CLI info | `version` | Print CLI version |
+| CLI info | `version`, `date` | Print CLI version or the canonical session date line |
 | Checklist shortcut | `add-task --checklist-items "a, b"` | Creates native checklist, requires `--auth-token` or `THINGS_AUTH_TOKEN` |
 
 Reordering notes:

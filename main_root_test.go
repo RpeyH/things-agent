@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"regexp"
 	"testing"
+	"time"
 )
 
 func TestRootCommandBuildsAndRunsVersion(t *testing.T) {
@@ -13,6 +15,31 @@ func TestRootCommandBuildsAndRunsVersion(t *testing.T) {
 	root.SetArgs([]string{"version"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("version execute failed: %v", err)
+	}
+}
+
+func TestRootCommandRunsDate(t *testing.T) {
+	root := newRootCmd()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&out)
+	root.SetArgs([]string{"date"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("date execute failed: %v", err)
+	}
+	matched, err := regexp.MatchString(`^[A-Z][a-z]+ \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .+\n$`, out.String())
+	if err != nil {
+		t.Fatalf("date output regex failed: %v", err)
+	}
+	if !matched {
+		t.Fatalf("unexpected date output %q", out.String())
+	}
+}
+
+func TestFormatCurrentDate(t *testing.T) {
+	got := formatCurrentDate(time.Date(2026, time.March, 8, 7, 18, 8, 0, time.FixedZone("-03", -3*60*60)))
+	if got != "Sunday 2026-03-08 07:18:08 -03" {
+		t.Fatalf("unexpected formatted date %q", got)
 	}
 }
 

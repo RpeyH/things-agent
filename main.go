@@ -73,6 +73,7 @@ quiesces Things, verifies restored files, and rolls back on failure.`,
 	root.AddCommand(
 		newBackupCmd(),
 		newRestoreCmd(),
+		newDateCmd(),
 		newSessionStartCmd(),
 		newURLCmd(),
 		newAreasCmd(),
