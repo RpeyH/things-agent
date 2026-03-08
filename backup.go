@@ -18,6 +18,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+var rawSnapshotFileNames = []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"}
+
 type backupManager struct {
 	dataDir          string
 	copyFn           func(src, dst string) error
@@ -102,7 +104,7 @@ func (bm *backupManager) CreateWithMetadata(ctx context.Context, meta backupCrea
 		}
 		created = append(created, dst)
 	} else {
-		for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+		for _, base := range rawSnapshotFileNames {
 			src := filepath.Join(bm.dataDir, base)
 			if _, err := os.Stat(src); err != nil {
 				continue
@@ -160,12 +162,8 @@ func (bm *backupManager) List(ctx context.Context) ([]backupSnapshot, error) {
 		if err != nil {
 			return nil, err
 		}
-		snapshot := buildBackupSnapshot(ts, files, backupCreateMetadata{})
-		if metadata, err := bm.loadBackupMetadata(ts); err == nil {
-			snapshot = metadata
-			snapshot.Files = append([]string(nil), files...)
-			snapshot.Complete = len(files) > 0
-		} else if !os.IsNotExist(err) {
+		snapshot, err := bm.snapshotForFiles(ts, files)
+		if err != nil {
 			return nil, err
 		}
 		snapshots = append(snapshots, snapshot)
@@ -185,15 +183,7 @@ func (bm *backupManager) Verify(ctx context.Context, ts string) (backupSnapshot,
 	if err := verifySnapshotAgainstLive(bm.dataDir, files); err != nil {
 		return backupSnapshot{}, err
 	}
-	snapshot := buildBackupSnapshot(ts, files, backupCreateMetadata{})
-	if metadata, err := bm.loadBackupMetadata(ts); err == nil {
-		snapshot = metadata
-		snapshot.Files = append([]string(nil), files...)
-		snapshot.Complete = true
-	} else if err != nil && !os.IsNotExist(err) {
-		return backupSnapshot{}, err
-	}
-	return snapshot, nil
+	return bm.snapshotForFiles(ts, files)
 }
 
 func (bm *backupManager) FilesForTimestamp(ctx context.Context, ts string) ([]string, error) {
@@ -209,7 +199,7 @@ func (bm *backupManager) FilesForTimestamp(ctx context.Context, ts string) ([]st
 		}
 	}
 	var paths []string
-	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+	for _, base := range rawSnapshotFileNames {
 		candidate := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
 		if _, err := os.Stat(candidate); err == nil {
 			paths = append(paths, candidate)
@@ -299,7 +289,7 @@ func (bm *backupManager) prune(ctx context.Context, keep int) error {
 				return err
 			}
 		} else {
-			for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+			for _, base := range rawSnapshotFileNames {
 				target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
 				if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 					return err
@@ -403,7 +393,7 @@ func (bm *backupManager) timestampExists(ts string) (bool, error) {
 			return false, err
 		}
 	}
-	for _, base := range []string{"main.sqlite", "main.sqlite-shm", "main.sqlite-wal"} {
+	for _, base := range rawSnapshotFileNames {
 		target := filepath.Join(bm.backupPath(), base+"."+ts+".bak")
 		if _, err := os.Stat(target); err == nil {
 			return true, nil
@@ -507,6 +497,20 @@ func (bm *backupManager) loadBackupMetadata(ts string) (backupSnapshot, error) {
 		return backupSnapshot{}, err
 	}
 	return snapshot, nil
+}
+
+func (bm *backupManager) snapshotForFiles(ts string, files []string) (backupSnapshot, error) {
+	snapshot := buildBackupSnapshot(ts, files, backupCreateMetadata{})
+	metadata, err := bm.loadBackupMetadata(ts)
+	if err == nil {
+		metadata.Files = append([]string(nil), files...)
+		metadata.Complete = len(files) > 0
+		return metadata, nil
+	}
+	if os.IsNotExist(err) {
+		return snapshot, nil
+	}
+	return backupSnapshot{}, err
 }
 
 func hashSemanticLines(lines []string) string {

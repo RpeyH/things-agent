@@ -16,6 +16,30 @@ type backupExecutor struct {
 }
 
 func newBackupExecutor(cfg *runtimeConfig) *backupExecutor {
+	return newBackupExecutorWithMetadata(cfg, backupCreateMetadata{
+		Kind:          backupKindExplicit,
+		SourceCommand: "backup",
+		Reason:        "manual checkpoint",
+	})
+}
+
+func newSessionBackupExecutor(cfg *runtimeConfig) *backupExecutor {
+	return newBackupExecutorWithMetadata(cfg, backupCreateMetadata{
+		Kind:          backupKindSession,
+		SourceCommand: "session-start",
+		Reason:        "session bootstrap checkpoint",
+	})
+}
+
+func newDestructiveBackupExecutor(cfg *runtimeConfig) *backupExecutor {
+	return newBackupExecutorWithMetadata(cfg, backupCreateMetadata{
+		Kind:          backupKindSafety,
+		SourceCommand: "auto-safety",
+		Reason:        "automatic rollback checkpoint",
+	})
+}
+
+func newBackupExecutorWithMetadata(cfg *runtimeConfig, meta backupCreateMetadata) *backupExecutor {
 	bundleID := cfg.bundleID
 	if bundleID == "" {
 		bundleID = defaultBundleID
@@ -33,32 +57,8 @@ func newBackupExecutor(cfg *runtimeConfig) *backupExecutor {
 	return &backupExecutor{
 		runtime:     runtime,
 		settleDelay: backupSettleDelay,
-		createMeta: backupCreateMetadata{
-			Kind:          backupKindExplicit,
-			SourceCommand: "backup",
-			Reason:        "manual checkpoint",
-		},
+		createMeta:  meta,
 	}
-}
-
-func newSessionBackupExecutor(cfg *runtimeConfig) *backupExecutor {
-	exec := newBackupExecutor(cfg)
-	exec.createMeta = backupCreateMetadata{
-		Kind:          backupKindSession,
-		SourceCommand: "session-start",
-		Reason:        "session bootstrap checkpoint",
-	}
-	return exec
-}
-
-func newDestructiveBackupExecutor(cfg *runtimeConfig) *backupExecutor {
-	exec := newBackupExecutor(cfg)
-	exec.createMeta = backupCreateMetadata{
-		Kind:          backupKindSafety,
-		SourceCommand: "auto-safety",
-		Reason:        "automatic rollback checkpoint",
-	}
-	return exec
 }
 
 func (b *backupExecutor) Create(ctx context.Context) (paths []string, err error) {
