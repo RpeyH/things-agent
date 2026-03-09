@@ -2,69 +2,22 @@ package main
 
 import (
 	"context"
-	"errors"
 	"strings"
 
+	commandlib "github.com/alnah/things-agent/internal/command"
 	"github.com/spf13/cobra"
 )
 
 func resolveAreaSelector(name, id string) (string, string, error) {
-	name = strings.TrimSpace(name)
-	id = strings.TrimSpace(id)
-	switch {
-	case name == "" && id == "":
-		return "", "", errors.New("exactly one of --area or --area-id is required")
-	case name != "" && id != "":
-		return "", "", errors.New("exactly one of --area or --area-id is allowed")
-	default:
-		return name, id, nil
-	}
+	return commandlib.ResolveAreaSelector(name, id)
 }
 
 func resolveMoveTaskDestination(toArea, toAreaID, toProject, toProjectID, toHeading, toHeadingID string) (map[string]string, error) {
-	type destination struct {
-		param string
-		value string
-	}
-	options := []destination{
-		{param: "list", value: strings.TrimSpace(toArea)},
-		{param: "list-id", value: strings.TrimSpace(toAreaID)},
-		{param: "list", value: strings.TrimSpace(toProject)},
-		{param: "list-id", value: strings.TrimSpace(toProjectID)},
-		{param: "heading", value: strings.TrimSpace(toHeading)},
-		{param: "heading-id", value: strings.TrimSpace(toHeadingID)},
-	}
-	params := map[string]string{}
-	selected := 0
-	for _, option := range options {
-		if option.value == "" {
-			continue
-		}
-		selected++
-		params[option.param] = option.value
-	}
-	if selected == 0 {
-		return nil, errors.New("destination is required: use one of --to-area, --to-area-id, --to-project, --to-project-id, --to-heading, or --to-heading-id")
-	}
-	if selected > 1 {
-		return nil, errors.New("exactly one move destination is allowed")
-	}
-	return params, nil
+	return commandlib.ResolveMoveTaskDestination(toArea, toAreaID, toProject, toProjectID, toHeading, toHeadingID)
 }
 
 func resolveMoveProjectDestination(toArea, toAreaID string) (map[string]string, error) {
-	params := map[string]string{}
-	switch {
-	case strings.TrimSpace(toArea) != "" && strings.TrimSpace(toAreaID) != "":
-		return nil, errors.New("exactly one of --to-area or --to-area-id is allowed")
-	case strings.TrimSpace(toArea) != "":
-		params["area"] = strings.TrimSpace(toArea)
-	case strings.TrimSpace(toAreaID) != "":
-		params["area-id"] = strings.TrimSpace(toAreaID)
-	default:
-		return nil, errors.New("destination is required: use --to-area or --to-area-id")
-	}
-	return params, nil
+	return commandlib.ResolveMoveProjectDestination(toArea, toAreaID)
 }
 
 func resolveTaskID(ctx context.Context, cfg *runtimeConfig, name, id string) (string, error) {
@@ -98,123 +51,53 @@ func resolveProjectID(ctx context.Context, cfg *runtimeConfig, name, id string) 
 }
 
 func newMoveTaskCmd() *cobra.Command {
-	var name, id string
-	var toArea, toAreaID, toProject, toProjectID, toHeading, toHeadingID string
-	cmd := &cobra.Command{
-		Use:   "move-task",
-		Short: "Move a task to an area, project, or heading",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params, err := resolveMoveTaskDestination(toArea, toAreaID, toProject, toProjectID, toHeading, toHeadingID)
+	return commandlib.NewMoveTaskCmd(func(cmd *cobra.Command, args []string, name, id string, params map[string]string) error {
+		return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+			taskID, err := resolveTaskID(ctx, cfg, name, id)
 			if err != nil {
 				return err
 			}
-			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
-				taskID, err := resolveTaskID(ctx, cfg, name, id)
-				if err != nil {
-					return err
-				}
-				token, err := requireAuthToken(cfg)
-				if err != nil {
-					return err
-				}
-				params["auth-token"] = token
-				params["id"] = taskID
-				return runThingsURL(ctx, cfg, "update", params)
-			})
-		},
-	}
-	cmd.Flags().StringVar(&name, "name", "", "Task name")
-	cmd.Flags().StringVar(&id, "id", "", "Task ID")
-	cmd.Flags().StringVar(&toArea, "to-area", "", "Target area name")
-	cmd.Flags().StringVar(&toAreaID, "to-area-id", "", "Target area ID")
-	cmd.Flags().StringVar(&toProject, "to-project", "", "Target project name")
-	cmd.Flags().StringVar(&toProjectID, "to-project-id", "", "Target project ID")
-	cmd.Flags().StringVar(&toHeading, "to-heading", "", "Target heading name")
-	cmd.Flags().StringVar(&toHeadingID, "to-heading-id", "", "Target heading ID")
-	return cmd
+			token, err := requireAuthToken(cfg)
+			if err != nil {
+				return err
+			}
+			params["auth-token"] = token
+			params["id"] = taskID
+			return runThingsURL(ctx, cfg, "update", params)
+		})
+	})
 }
 
 func newMoveProjectCmd() *cobra.Command {
-	var name, id string
-	var toArea, toAreaID string
-	cmd := &cobra.Command{
-		Use:   "move-project",
-		Short: "Move a project to another area",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			params, err := resolveMoveProjectDestination(toArea, toAreaID)
+	return commandlib.NewMoveProjectCmd(func(cmd *cobra.Command, args []string, name, id string, params map[string]string) error {
+		return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+			projectID, err := resolveProjectID(ctx, cfg, name, id)
 			if err != nil {
 				return err
 			}
-			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
-				projectID, err := resolveProjectID(ctx, cfg, name, id)
-				if err != nil {
-					return err
-				}
-				token, err := requireAuthToken(cfg)
-				if err != nil {
-					return err
-				}
-				params["auth-token"] = token
-				params["id"] = projectID
-				return runThingsURL(ctx, cfg, "update-project", params)
-			})
-		},
-	}
-	cmd.Flags().StringVar(&name, "name", "", "Project name")
-	cmd.Flags().StringVar(&id, "id", "", "Project ID")
-	cmd.Flags().StringVar(&toArea, "to-area", "", "Target area name")
-	cmd.Flags().StringVar(&toAreaID, "to-area-id", "", "Target area ID")
-	return cmd
+			token, err := requireAuthToken(cfg)
+			if err != nil {
+				return err
+			}
+			params["auth-token"] = token
+			params["id"] = projectID
+			return runThingsURL(ctx, cfg, "update-project", params)
+		})
+	})
 }
 
 func newReorderProjectItemsCmd() *cobra.Command {
-	var projectName, projectID, idsCSV string
-	cmd := &cobra.Command{
-		Use:   "reorder-project-items",
-		Short: "Reorder tasks inside a project (private Things backend)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			projectName, projectID, err = resolveEntitySelector(projectName, projectID)
-			if err != nil {
-				return err
-			}
-			ids := parseCSVList(idsCSV)
-			if len(ids) == 0 {
-				return errors.New("--ids is required")
-			}
-			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
-				return runResult(ctx, cfg, scriptReorderProjectItems(cfg.bundleID, projectName, projectID, ids))
-			})
-		},
-	}
-	cmd.Flags().StringVar(&projectName, "project", "", "Project name")
-	cmd.Flags().StringVar(&projectID, "project-id", "", "Project ID")
-	cmd.Flags().StringVar(&idsCSV, "ids", "", "Comma-separated ordered task IDs")
-	return cmd
+	return commandlib.NewReorderProjectItemsCmd(func(cmd *cobra.Command, args []string, projectName, projectID string, ids []string) error {
+		return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+			return runResult(ctx, cfg, scriptReorderProjectItems(cfg.bundleID, projectName, projectID, ids))
+		})
+	}, parseCSVList)
 }
 
 func newReorderAreaItemsCmd() *cobra.Command {
-	var areaName, areaID, idsCSV string
-	cmd := &cobra.Command{
-		Use:   "reorder-area-items",
-		Short: "Reorder items inside an area (private Things backend)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			areaName, areaID, err = resolveAreaSelector(areaName, areaID)
-			if err != nil {
-				return err
-			}
-			ids := parseCSVList(idsCSV)
-			if len(ids) == 0 {
-				return errors.New("--ids is required")
-			}
-			return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
-				return runResult(ctx, cfg, scriptReorderAreaItems(cfg.bundleID, areaName, areaID, ids))
-			})
-		},
-	}
-	cmd.Flags().StringVar(&areaName, "area", "", "Area name")
-	cmd.Flags().StringVar(&areaID, "area-id", "", "Area ID")
-	cmd.Flags().StringVar(&idsCSV, "ids", "", "Comma-separated ordered item IDs")
-	return cmd
+	return commandlib.NewReorderAreaItemsCmd(func(cmd *cobra.Command, args []string, areaName, areaID string, ids []string) error {
+		return withWriteBackup(cmd, false, func(ctx context.Context, cfg *runtimeConfig) error {
+			return runResult(ctx, cfg, scriptReorderAreaItems(cfg.bundleID, areaName, areaID, ids))
+		})
+	}, parseCSVList)
 }
