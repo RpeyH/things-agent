@@ -52,3 +52,7 @@ Session.vim
 
 # Editor / env temps
 .idea/
+
+# Local docs drafts
+docs/nocommit-*
+docs/**/nocommit-*
