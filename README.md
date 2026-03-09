@@ -17,6 +17,25 @@ Documentation split:
 - `README.md`: user-facing guide for the human who asks an AI coding agent such as Codex, Claude Code, Open Code, or similar tools to manage Things through the CLI.
 - [`AGENTS.md`](./AGENTS.md): operator contract for the AI agent that actually runs the CLI.
 
+## Table of contents
+
+- [Why this exists](#why-this-exists)
+- [What it does](#what-it-does)
+- [Opportunity](#opportunity)
+- [Project status](#project-status)
+- [Installation](#installation)
+- [Prerequisites](#prerequisites)
+- [Interaction model](#interaction-model)
+- [Design constraints](#design-constraints)
+- [Using with Codex, Claude Code, Open Code, etc.](#using-with-codex-claude-code-open-code-etc)
+- [Domain glossary](#domain-glossary)
+- [Known limits](#known-limits)
+- [Backup policy](#backup-policy)
+- [Common workflows](#common-workflows)
+- [Troubleshooting](#troubleshooting)
+- [Security warning read before use](#security-warning-read-before-use)
+- [CI and coverage](#ci-and-coverage)
+
 ## Why this exists
 
 Things already exposes useful automation surfaces, but AI agents benefit from a narrower operational layer with explicit commands, machine-readable outputs, and safer recovery workflows than ad hoc scripts.
