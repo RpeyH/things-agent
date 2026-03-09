@@ -1,4 +1,4 @@
-package main
+package build
 
 import (
 	"runtime/debug"
@@ -6,14 +6,14 @@ import (
 )
 
 func TestEffectiveCLIVersionPrefersConfiguredRelease(t *testing.T) {
-	got := effectiveCLIVersionFrom("0.3.16", nil)
+	got := EffectiveCLIVersionFrom("0.3.16", nil)
 	if got != "v0.3.16" {
 		t.Fatalf("expected tagged release version, got %q", got)
 	}
 }
 
 func TestEffectiveCLIVersionUsesBuildInfoVersionForTaggedInstall(t *testing.T) {
-	got := effectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
+	got := EffectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			Main: debug.Module{Version: "v0.3.16"},
 		}, true
@@ -24,7 +24,7 @@ func TestEffectiveCLIVersionUsesBuildInfoVersionForTaggedInstall(t *testing.T) {
 }
 
 func TestEffectiveCLIVersionUsesRevisionForDevBuild(t *testing.T) {
-	got := effectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
+	got := EffectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			Main: debug.Module{Version: "(devel)"},
 			Settings: []debug.BuildSetting{
@@ -38,7 +38,7 @@ func TestEffectiveCLIVersionUsesRevisionForDevBuild(t *testing.T) {
 }
 
 func TestEffectiveCLIVersionMarksDirtyDevBuild(t *testing.T) {
-	got := effectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
+	got := EffectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
 			Main: debug.Module{Version: "(devel)"},
 			Settings: []debug.BuildSetting{
@@ -53,7 +53,7 @@ func TestEffectiveCLIVersionMarksDirtyDevBuild(t *testing.T) {
 }
 
 func TestEffectiveCLIVersionFallsBackToDev(t *testing.T) {
-	got := effectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
+	got := EffectiveCLIVersionFrom("dev", func() (*debug.BuildInfo, bool) {
 		return nil, false
 	})
 	if got != "dev" {
