@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os/exec"
-	"strings"
+
+	thingslib "github.com/alnah/things-agent/internal/things"
 )
 
 type scriptRunner interface {
@@ -12,7 +11,7 @@ type scriptRunner interface {
 }
 
 type runner struct {
-	bundleID string
+	inner *thingslib.Runner
 }
 
 var newRuntimeRunner = func(bundleID string) scriptRunner {
@@ -21,25 +20,14 @@ var newRuntimeRunner = func(bundleID string) scriptRunner {
 
 func newRunner(bundleID string) *runner {
 	return &runner{
-		bundleID: bundleID,
+		inner: thingslib.NewRunner(bundleID),
 	}
 }
 
 func (r *runner) run(ctx context.Context, script string) (string, error) {
-	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
-	}
-	return strings.TrimSpace(string(out)), nil
+	return r.inner.Run(ctx, script)
 }
 
 func (r *runner) ensureReachable(ctx context.Context) error {
-	script := fmt.Sprintf(`tell application id "%s"
-  return name
-end tell`, r.bundleID)
-	if _, err := r.run(ctx, script); err != nil {
-		return fmt.Errorf("Things app not found (%s): %w", r.bundleID, err)
-	}
-	return nil
+	return r.inner.EnsureReachable(ctx)
 }

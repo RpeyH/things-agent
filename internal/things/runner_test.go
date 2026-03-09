@@ -1,4 +1,4 @@
-package main
+package things
 
 import (
 	"context"
@@ -7,22 +7,24 @@ import (
 	"testing"
 )
 
+const runnerTestBundleID = "com.culturedcode.ThingsMac"
+
 func TestNewRunner(t *testing.T) {
-	r := newRunner(defaultBundleID)
+	r := NewRunner(runnerTestBundleID)
 	if r == nil {
 		t.Fatal("expected runner")
 	}
 }
 
 func TestRunnerEnsureReachableAndRunErrorPaths(t *testing.T) {
-	r := newRunner("com.invalid.bundle")
-	if err := r.ensureReachable(context.Background()); err == nil {
+	r := NewRunner("com.invalid.bundle")
+	if err := r.EnsureReachable(context.Background()); err == nil {
 		t.Fatal("expected ensureReachable error with invalid bundle")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := r.run(ctx, `return "ok"`)
+	_, err := r.Run(ctx, `return "ok"`)
 	if err == nil {
 		t.Fatal("expected run error with canceled context")
 	}
@@ -37,11 +39,11 @@ func TestRunnerEnsureReachableAndRunSuccessWithFakeOsaScript(t *testing.T) {
 	}
 	t.Setenv("PATH", tmp+":"+os.Getenv("PATH"))
 
-	r := newRunner(defaultBundleID)
-	if err := r.ensureReachable(context.Background()); err != nil {
+	r := NewRunner(runnerTestBundleID)
+	if err := r.EnsureReachable(context.Background()); err != nil {
 		t.Fatalf("ensureReachable should succeed with fake osascript: %v", err)
 	}
-	out, err := r.run(context.Background(), `return "ok"`)
+	out, err := r.Run(context.Background(), `return "ok"`)
 	if err != nil {
 		t.Fatalf("run should succeed with fake osascript: %v", err)
 	}
