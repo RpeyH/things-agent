@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
-	"net/url"
 	"strings"
 	"time"
+
+	thingslib "github.com/alnah/things-agent/internal/things"
 )
 
 var appleScriptMonthNames = [...]string{
@@ -96,11 +95,11 @@ func requireAuthToken(cfg *runtimeConfig) (string, error) {
 }
 
 func urlEncodeChecklist(items []string) string {
-	return thingsQueryEscape(strings.Join(items, "\n"))
+	return thingslib.URLEncodeChecklist(items)
 }
 
 func thingsQueryEscape(value string) string {
-	return strings.ReplaceAll(url.QueryEscape(value), "+", "%20")
+	return thingslib.ThingsQueryEscape(value)
 }
 
 func scriptSetChecklistByID(bundleID, taskID string, items []string, authToken string) string {
@@ -125,21 +124,7 @@ return tid`, bundleID, scriptResolveTaskRef(taskName, taskID), escapeApple(thing
 }
 
 func parseCSVList(value string) []string {
-	reader := csv.NewReader(strings.NewReader(value))
-	reader.TrimLeadingSpace = true
-	fields, err := reader.Read()
-	if err != nil && !errors.Is(err, io.EOF) {
-		fields = strings.Split(value, ",")
-	}
-	out := make([]string, 0, len(fields))
-	for _, field := range fields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		out = append(out, field)
-	}
-	return out
+	return thingslib.ParseCSVList(value)
 }
 
 func scriptListLiteral(values []string) string {

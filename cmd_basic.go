@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
+	thingslib "github.com/alnah/things-agent/internal/things"
 	"github.com/spf13/cobra"
 )
 
@@ -20,18 +20,11 @@ func runThingsURL(ctx context.Context, cfg *runtimeConfig, command string, param
 }
 
 func encodeThingsURLParams(params map[string]string) string {
-	values := url.Values{}
-	for k, v := range params {
-		values.Set(k, v)
-	}
-	return strings.ReplaceAll(values.Encode(), "+", "%20")
+	return thingslib.EncodeThingsURLParams(params)
 }
 
 func scriptOpenURL(bundleID, rawURL string) string {
-	return fmt.Sprintf(`tell application id "%s"
-  open location "%s"
-end tell
-return "ok"`, escapeApple(bundleID), escapeApple(rawURL))
+	return thingslib.ScriptOpenURL(bundleID, rawURL)
 }
 
 func setIfNotEmpty(params map[string]string, key, value string) {
@@ -61,18 +54,7 @@ func setBoolIfChanged(cmd *cobra.Command, params map[string]string, key string, 
 }
 
 func normalizeChecklistInput(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	if strings.Contains(raw, "\n") {
-		return raw
-	}
-	items := parseCSVList(raw)
-	if len(items) == 0 {
-		return raw
-	}
-	return strings.Join(items, "\n")
+	return thingslib.NormalizeChecklistInput(raw)
 }
 
 func newBackupCmd() *cobra.Command {

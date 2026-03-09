@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	thingslib "github.com/alnah/things-agent/internal/things"
 )
 
 func resolveDataDir() (string, error) {
@@ -36,8 +38,5 @@ func envOrDefault(key, defaultValue string) string {
 }
 
 func escapeApple(value string) string {
-	value = strings.ReplaceAll(value, "\\", "\\\\")
-	value = strings.ReplaceAll(value, "\"", "\\\"")
-	value = strings.ReplaceAll(value, "\n", "\\n")
-	return value
+	return thingslib.EscapeApple(value)
 }

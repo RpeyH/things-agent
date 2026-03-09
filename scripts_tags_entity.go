@@ -1,54 +1,19 @@
 package main
 
-import "fmt"
+import thingslib "github.com/alnah/things-agent/internal/things"
 
 func scriptListTags(bundleID, query string) string {
-	if query == "" {
-		return fmt.Sprintf(`tell application id "%s"
-  return name of every tag
-end tell`, bundleID)
-	}
-	return fmt.Sprintf(`tell application id "%s"
-  set q to "%s"
-  return name of (every tag whose name contains q)
-end tell`, bundleID, escapeApple(query))
+	return thingslib.ScriptListTags(bundleID, query)
 }
 
 func scriptAddTag(bundleID, name, parent string) string {
-	return fmt.Sprintf(`tell application id "%s"
-  set t to make new tag with properties {name:"%s"}
-  if "%s" is not "" then
-    set parent tag of t to first tag whose name is "%s"
-  end if
-  return name of t
-end tell`, bundleID, escapeApple(name), escapeApple(parent), escapeApple(parent))
+	return thingslib.ScriptAddTag(bundleID, name, parent)
 }
 
 func scriptEditTag(bundleID, name, newName, parent string, parentChanged bool) string {
-	parentChangedText := "false"
-	if parentChanged {
-		parentChangedText = "true"
-	}
-	return fmt.Sprintf(`tell application id "%s"
-  set t to first tag whose name is "%s"
-  if "%s" is not "" then
-    set name of t to "%s"
-  end if
-  if %s then
-    if "%s" is "" then
-      set parent tag of t to missing value
-    else
-      set parent tag of t to first tag whose name is "%s"
-    end if
-  end if
-  return name of t
-end tell`, bundleID, escapeApple(name), escapeApple(newName), escapeApple(newName), parentChangedText, escapeApple(parent), escapeApple(parent))
+	return thingslib.ScriptEditTag(bundleID, name, newName, parent, parentChanged)
 }
 
 func scriptDeleteTag(bundleID, name string) string {
-	return fmt.Sprintf(`tell application id "%s"
-  set t to first tag whose name is "%s"
-  delete t
-  return "ok"
-end tell`, bundleID, escapeApple(name))
+	return thingslib.ScriptDeleteTag(bundleID, name)
 }
