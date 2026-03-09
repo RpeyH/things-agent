@@ -1,4 +1,4 @@
-package main
+package things
 
 import (
 	"strings"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestScriptChildTaskListingAndShow(t *testing.T) {
-	list := scriptListChildTasks("bundle.id", "task", "")
+	list := ScriptListChildTasks("bundle.id", "task", "")
 	if !strings.Contains(list, "set childTasks to to dos of t") {
 		t.Fatalf("unexpected list-child-tasks script: %s", list)
 	}
@@ -23,7 +23,7 @@ func TestScriptChildTaskListingAndShow(t *testing.T) {
 		t.Fatalf("expected unsupported status marker: %s", list)
 	}
 
-	showWith := scriptShowTask("bundle.id", "task", "", true)
+	showWith := ScriptShowTask("bundle.id", "task", "", true)
 	if !strings.Contains(showWith, "if true then") {
 		t.Fatalf("expected child-task block enabled: %s", showWith)
 	}
@@ -39,7 +39,7 @@ func TestScriptChildTaskListingAndShow(t *testing.T) {
 	if !strings.Contains(showWith, "Checklist Items: unsupported via AppleScript") {
 		t.Fatalf("expected explicit checklist limitation in show-task script: %s", showWith)
 	}
-	showWithout := scriptShowTask("bundle.id", "task", "", false)
+	showWithout := ScriptShowTask("bundle.id", "task", "", false)
 	if !strings.Contains(showWithout, "if false then") {
 		t.Fatalf("expected child-task block disabled: %s", showWithout)
 	}
@@ -49,24 +49,24 @@ func TestScriptChildTaskListingAndShow(t *testing.T) {
 }
 
 func TestScriptAddChildTaskOptionallySetsNotes(t *testing.T) {
-	noNotes := scriptAddChildTask("bundle.id", "task", "", "sub", "")
+	noNotes := ScriptAddChildTask("bundle.id", "task", "", "sub", "")
 	if strings.Contains(noNotes, "set notes of s to") {
 		t.Fatalf("notes should not be set when empty: %s", noNotes)
 	}
 
-	withNotes := scriptAddChildTask("bundle.id", "task", "", "sub", "n")
+	withNotes := ScriptAddChildTask("bundle.id", "task", "", "sub", "n")
 	if !strings.Contains(withNotes, `set notes of s to "n"`) {
 		t.Fatalf("notes should be set when provided: %s", withNotes)
 	}
 }
 
 func TestScriptFindChildTaskByIndexOrName(t *testing.T) {
-	byIndex := scriptFindChildTask("bundle.id", "task", "", "", "", 2)
+	byIndex := ScriptFindChildTask("bundle.id", "task", "", "", "", 2)
 	if !strings.Contains(byIndex, "set childTasks to to dos of t") || !strings.Contains(byIndex, "set s to item 2 of childTasks") {
 		t.Fatalf("expected lookup by index: %s", byIndex)
 	}
 
-	byName := scriptFindChildTask("bundle.id", "task", "", "sub", "", 0)
+	byName := ScriptFindChildTask("bundle.id", "task", "", "sub", "", 0)
 	if !strings.Contains(byName, `if (name of childTaskRef as string) is "sub"`) {
 		t.Fatalf("expected lookup by name: %s", byName)
 	}
@@ -74,28 +74,28 @@ func TestScriptFindChildTaskByIndexOrName(t *testing.T) {
 		t.Fatalf("expected completed child-task fallback in name lookup: %s", byName)
 	}
 
-	byID := scriptFindChildTask("bundle.id", "", "", "", "child-1", 0)
+	byID := ScriptFindChildTask("bundle.id", "", "", "", "child-1", 0)
 	if !strings.Contains(byID, `every to do whose id is "child-1"`) || strings.Contains(byID, "repeat with candidate in every to do") {
 		t.Fatalf("expected direct id lookup without parent traversal: %s", byID)
 	}
 }
 
 func TestScriptChildTaskMutations(t *testing.T) {
-	edit := scriptEditChildTask("bundle.id", "task", "", "sub", "", 0, "new", "note")
+	edit := ScriptEditChildTask("bundle.id", "task", "", "sub", "", 0, "new", "note")
 	if !strings.Contains(edit, `set name of s to "new"`) || !strings.Contains(edit, `set notes of s to "note"`) {
 		t.Fatalf("unexpected edit script: %s", edit)
 	}
 
-	del := scriptDeleteChildTask("bundle.id", "task", "", "sub", "", 0)
+	del := ScriptDeleteChildTask("bundle.id", "task", "", "sub", "", 0)
 	if !strings.Contains(del, "delete s") {
 		t.Fatalf("unexpected delete script: %s", del)
 	}
 
-	complete := scriptSetChildTaskStatus("bundle.id", "task", "", "sub", "", 0, true)
+	complete := ScriptSetChildTaskStatus("bundle.id", "task", "", "sub", "", 0, true)
 	if !strings.Contains(complete, "set status of s to completed") {
 		t.Fatalf("unexpected complete script: %s", complete)
 	}
-	uncomplete := scriptSetChildTaskStatus("bundle.id", "task", "", "sub", "", 0, false)
+	uncomplete := ScriptSetChildTaskStatus("bundle.id", "task", "", "sub", "", 0, false)
 	if !strings.Contains(uncomplete, "set status of s to open") {
 		t.Fatalf("unexpected uncomplete script: %s", uncomplete)
 	}
