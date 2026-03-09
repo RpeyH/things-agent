@@ -5,22 +5,18 @@ import (
 	"errors"
 	"strings"
 
+	commandlib "github.com/alnah/things-agent/internal/command"
 	"github.com/spf13/cobra"
 )
 
 func newTagsCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "tags",
-		Short: "Manage Things tags",
-	}
-	cmd.AddCommand(
+	return commandlib.NewTagsRootCmd(
 		newTagsListCmd(),
 		newTagsSearchCmd(),
 		newTagsAddCmd(),
 		newTagsEditCmd(),
 		newTagsDeleteCmd(),
 	)
-	return cmd
 }
 
 func newTagsListCmd() *cobra.Command {

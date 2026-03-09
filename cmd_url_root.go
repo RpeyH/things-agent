@@ -1,13 +1,12 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	commandlib "github.com/alnah/things-agent/internal/command"
+	"github.com/spf13/cobra"
+)
 
 func newURLCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "url",
-		Short: "Things URL Scheme commands (official API)",
-	}
-	cmd.AddCommand(
+	return commandlib.NewURLRootCmd(
 		newURLAddCmd(),
 		newURLUpdateCmd(),
 		newURLAddProjectCmd(),
@@ -17,5 +16,4 @@ func newURLCmd() *cobra.Command {
 		newURLVersionCmd(),
 		newURLJSONCmd(),
 	)
-	return cmd
 }
