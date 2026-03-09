@@ -23,7 +23,7 @@ Things already exposes useful automation surfaces, but AI agents benefit from a 
 
 This project is built for the practical path:
 
-`Human intent -> AI agent -> things-agent CLI -> Things 3`
+`Human intent > AI agent > things-agent CLI > Things 3`
 
 Normal reads and writes stay on top of AppleScript and the official Things URL Scheme.
 Internal SQLite work is reserved for restore only.
@@ -218,8 +218,8 @@ things-agent lists
 
 Then re-check macOS privacy settings for your terminal/agent app:
 
-- `System Settings -> Privacy & Security -> Automation` (allow access to `Things`)
-- `System Settings -> Privacy & Security -> Full Disk Access` (if your setup requires it)
+- `System Settings > Privacy & Security > Automation` (allow access to `Things`)
+- `System Settings > Privacy & Security > Full Disk Access` (if your setup requires it)
 
 In practice, agents often get better results when their tool runner is configured with broader filesystem, shell, or bypass-style permission modes.
 That also gives the agent broader access to your system, so keep an eye on what it is doing and review risky actions carefully.
