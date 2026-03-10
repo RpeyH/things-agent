@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -342,5 +343,233 @@ func TestCopyFileAndEnsureBackupDirErrorBranches(t *testing.T) {
 	bm := newBackupManager(fileAsDir)
 	if _, err := bm.ensureBackupDir(); err == nil {
 		t.Fatal("expected ensureBackupDir error when dataDir is a file")
+	}
+}
+
+func makePackageModeDataDir(t *testing.T) string {
+	t.Helper()
+
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "Things Database.thingsdatabase")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir data dir failed: %v", err)
+	}
+	return dataDir
+}
+
+func TestBackupManagerPackageModeCreateVerifyRestoreAndPrune(t *testing.T) {
+	dataDir := makePackageModeDataDir(t)
+	dbPath := filepath.Join(dataDir, "main.sqlite")
+	if err := os.WriteFile(dbPath, []byte("before"), 0o644); err != nil {
+		t.Fatalf("seed main.sqlite failed: %v", err)
+	}
+
+	bm := newBackupManager(dataDir)
+	created, err := bm.CreateWithMetadata(context.Background(), backupCreateMetadata{
+		Kind:          backupKindExplicit,
+		SourceCommand: "backup",
+		Reason:        "manual checkpoint",
+	})
+	if err != nil {
+		t.Fatalf("CreateWithMetadata failed: %v", err)
+	}
+	if len(created) != 1 {
+		t.Fatalf("expected a single package snapshot file, got %#v", created)
+	}
+	ts := inferTimestamp(created[0])
+	if ts == "" {
+		t.Fatalf("expected timestamp from created file, got %#v", created)
+	}
+	if got := bm.livePrimaryDBPath(); got != dbPath {
+		t.Fatalf("livePrimaryDBPath mismatch: got %q want %q", got, dbPath)
+	}
+	wantSnapshotDir := filepath.Join(filepath.Dir(dataDir), backupDirName, "snapshot."+ts+".thingsdatabase")
+	if got := bm.snapshotDir(ts); got != wantSnapshotDir {
+		t.Fatalf("snapshotDir mismatch: got %q want %q", got, wantSnapshotDir)
+	}
+
+	files, err := bm.FilesForTimestamp(context.Background(), ts)
+	if err != nil {
+		t.Fatalf("FilesForTimestamp failed: %v", err)
+	}
+	if len(files) != 1 || filepath.Base(files[0]) != "main.sqlite" {
+		t.Fatalf("unexpected package snapshot files: %#v", files)
+	}
+
+	snapshots, err := bm.List(context.Background())
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(snapshots) != 1 || !snapshots[0].Complete || len(snapshots[0].Files) != 1 {
+		t.Fatalf("unexpected package snapshots: %#v", snapshots)
+	}
+
+	snapshot, err := bm.Verify(context.Background(), ts)
+	if err != nil {
+		t.Fatalf("Verify failed: %v", err)
+	}
+	if snapshot.Timestamp != ts || len(snapshot.Files) != 1 {
+		t.Fatalf("unexpected verified package snapshot: %#v", snapshot)
+	}
+
+	if err := os.WriteFile(dbPath, []byte("after"), 0o644); err != nil {
+		t.Fatalf("mutate main.sqlite failed: %v", err)
+	}
+	restored, err := bm.Restore(context.Background(), ts)
+	if err != nil {
+		t.Fatalf("Restore failed: %v", err)
+	}
+	if len(restored) != 1 {
+		t.Fatalf("expected single restored file, got %#v", restored)
+	}
+	liveData, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("read restored main.sqlite failed: %v", err)
+	}
+	if string(liveData) != "before" {
+		t.Fatalf("expected restored package main.sqlite, got %q", string(liveData))
+	}
+
+	if err := os.WriteFile(dbPath, []byte("newer"), 0o644); err != nil {
+		t.Fatalf("write second snapshot live data failed: %v", err)
+	}
+	bm.nowFn = func() time.Time {
+		parsed, err := time.ParseInLocation(backupTSFormat, ts, time.Local)
+		if err != nil {
+			t.Fatalf("parse timestamp failed: %v", err)
+		}
+		return parsed
+	}
+	second, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("second Create failed: %v", err)
+	}
+	secondTS := inferTimestamp(second[0])
+	if secondTS == ts {
+		t.Fatalf("expected second package snapshot timestamp to differ from %q", ts)
+	}
+
+	if err := bm.prune(context.Background(), 1); err != nil {
+		t.Fatalf("prune failed: %v", err)
+	}
+	if _, err := os.Stat(bm.snapshotDir(ts)); !os.IsNotExist(err) {
+		t.Fatalf("expected oldest package snapshot to be pruned, stat err=%v", err)
+	}
+	if _, err := os.Stat(bm.snapshotDir(secondTS)); err != nil {
+		t.Fatalf("expected newest package snapshot to remain, stat err=%v", err)
+	}
+}
+
+func TestBackupManagerPackageModeRestoreFileRejectsInvalidBaseName(t *testing.T) {
+	dataDir := makePackageModeDataDir(t)
+	bm := newBackupManager(dataDir)
+
+	err := bm.RestoreFile(context.Background(), filepath.Join(dataDir, "not-main.sqlite"))
+	if err == nil || !strings.Contains(err.Error(), "nom de backup invalide") {
+		t.Fatalf("expected invalid package backup name error, got %v", err)
+	}
+}
+
+func TestClearRestoreSyncMetadata(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "main.sqlite")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	stmts := []string{
+		"CREATE TABLE BSSyncronyMetadata (id INTEGER)",
+		"CREATE TABLE ThingsTouch_ExtensionCommandStore_Commands (id INTEGER)",
+		"CREATE TABLE ThingsTouch_ExtensionCommandStore_Meta (id INTEGER)",
+		"INSERT INTO BSSyncronyMetadata(id) VALUES (1)",
+		"INSERT INTO ThingsTouch_ExtensionCommandStore_Commands(id) VALUES (1)",
+		"INSERT INTO ThingsTouch_ExtensionCommandStore_Meta(id) VALUES (1)",
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("db.Exec(%q) failed: %v", stmt, err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("db.Close failed: %v", err)
+	}
+
+	if err := clearRestoreSyncMetadata(dbPath); err != nil {
+		t.Fatalf("clearRestoreSyncMetadata failed: %v", err)
+	}
+
+	verify, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open verify failed: %v", err)
+	}
+	defer verify.Close()
+
+	for _, table := range []string{
+		"BSSyncronyMetadata",
+		"ThingsTouch_ExtensionCommandStore_Commands",
+		"ThingsTouch_ExtensionCommandStore_Meta",
+	} {
+		var count int
+		if err := verify.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil {
+			t.Fatalf("count rows in %s failed: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("expected %s to be cleared, got %d rows", table, count)
+		}
+	}
+}
+
+func TestClearRestoreSyncMetadataIgnoresMissingTables(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "main.sqlite")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	if _, err := db.Exec("CREATE TABLE BSSyncronyMetadata (id INTEGER)"); err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("db.Close failed: %v", err)
+	}
+
+	if err := clearRestoreSyncMetadata(dbPath); err != nil {
+		t.Fatalf("clearRestoreSyncMetadata should ignore missing tables: %v", err)
+	}
+}
+
+func TestCopyDirCopiesNestedFiles(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "src")
+	dst := filepath.Join(t.TempDir(), "dst")
+	if err := os.MkdirAll(filepath.Join(src, "nested"), 0o755); err != nil {
+		t.Fatalf("mkdir src failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.sqlite"), []byte("root"), 0o644); err != nil {
+		t.Fatalf("write root file failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "nested", "extra.txt"), []byte("nested"), 0o644); err != nil {
+		t.Fatalf("write nested file failed: %v", err)
+	}
+
+	if err := copyDir(src, dst); err != nil {
+		t.Fatalf("copyDir failed: %v", err)
+	}
+
+	for _, check := range []struct {
+		path string
+		want string
+	}{
+		{path: filepath.Join(dst, "main.sqlite"), want: "root"},
+		{path: filepath.Join(dst, "nested", "extra.txt"), want: "nested"},
+	} {
+		data, err := os.ReadFile(check.path)
+		if err != nil {
+			t.Fatalf("read copied file %s failed: %v", check.path, err)
+		}
+		if string(data) != check.want {
+			t.Fatalf("copied file %s mismatch: got %q want %q", check.path, string(data), check.want)
+		}
 	}
 }
