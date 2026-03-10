@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -133,6 +134,78 @@ func newTestRestoreExecutor(bm *backupManager, app appController) *restoreExecut
 			return testSemanticManifest(1, 0, 0), nil
 		},
 	}
+}
+
+func writePackageModeSQLite(t *testing.T, dbPath, label string, syncRows int) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%s) failed: %v", dbPath, err)
+	}
+	defer db.Close()
+
+	stmts := []string{
+		"DROP TABLE IF EXISTS Payload",
+		"DROP TABLE IF EXISTS BSSyncronyMetadata",
+		"DROP TABLE IF EXISTS ThingsTouch_ExtensionCommandStore_Commands",
+		"DROP TABLE IF EXISTS ThingsTouch_ExtensionCommandStore_Meta",
+		"CREATE TABLE Payload (label TEXT)",
+		"CREATE TABLE BSSyncronyMetadata (id INTEGER)",
+		"CREATE TABLE ThingsTouch_ExtensionCommandStore_Commands (id INTEGER)",
+		"CREATE TABLE ThingsTouch_ExtensionCommandStore_Meta (id INTEGER)",
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatalf("db.Exec(%q) failed: %v", stmt, err)
+		}
+	}
+	if _, err := db.Exec("INSERT INTO Payload(label) VALUES (?)", label); err != nil {
+		t.Fatalf("insert payload failed: %v", err)
+	}
+	for i := 0; i < syncRows; i++ {
+		for _, table := range []string{
+			"BSSyncronyMetadata",
+			"ThingsTouch_ExtensionCommandStore_Commands",
+			"ThingsTouch_ExtensionCommandStore_Meta",
+		} {
+			if _, err := db.Exec("INSERT INTO "+table+"(id) VALUES (?)", i+1); err != nil {
+				t.Fatalf("insert into %s failed: %v", table, err)
+			}
+		}
+	}
+}
+
+func readPackageModeLabel(t *testing.T, dbPath string) string {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%s) failed: %v", dbPath, err)
+	}
+	defer db.Close()
+
+	var label string
+	if err := db.QueryRow("SELECT label FROM Payload LIMIT 1").Scan(&label); err != nil {
+		t.Fatalf("read payload label failed: %v", err)
+	}
+	return label
+}
+
+func countRowsInTable(t *testing.T, dbPath, table string) int {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("sql.Open(%s) failed: %v", dbPath, err)
+	}
+	defer db.Close()
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM " + table).Scan(&count); err != nil {
+		t.Fatalf("count rows in %s failed: %v", table, err)
+	}
+	return count
 }
 
 func TestRestoreExecutorRestoresAndReopensWhenAppWasRunning(t *testing.T) {
@@ -673,6 +746,140 @@ func TestRestoreExecutorWaitsForStableFiles(t *testing.T) {
 	if index < 3 {
 		t.Fatalf("expected multiple stability probes, got %d", index)
 	}
+}
+
+func TestRestoreExecutorExecutePackageModeClearsSyncMetadata(t *testing.T) {
+	dataDir := makePackageModeDataDir(t)
+	dbPath := filepath.Join(dataDir, "main.sqlite")
+	writePackageModeSQLite(t, dbPath, "before", 2)
+
+	bm := newBackupManager(dataDir)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed package snapshot failed: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+
+	writePackageModeSQLite(t, dbPath, "after", 3)
+
+	exec := newTestRestoreExecutor(bm, &fakeAppController{})
+	journal, err := exec.Execute(context.Background(), targetTS, false)
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if journal.Outcome != "restored" {
+		t.Fatalf("expected restored outcome, got %#v", journal)
+	}
+	if readPackageModeLabel(t, dbPath) != "before" {
+		t.Fatalf("expected restored payload label, got %q", readPackageModeLabel(t, dbPath))
+	}
+	for _, table := range []string{
+		"BSSyncronyMetadata",
+		"ThingsTouch_ExtensionCommandStore_Commands",
+		"ThingsTouch_ExtensionCommandStore_Meta",
+	} {
+		if got := countRowsInTable(t, dbPath, table); got != 0 {
+			t.Fatalf("expected %s to be cleared after prepare-launch, got %d rows", table, got)
+		}
+	}
+
+	foundPrepareLaunch := false
+	for _, step := range journal.Steps {
+		if step.Name == "prepare-launch" && step.Status == "ok" {
+			foundPrepareLaunch = true
+			break
+		}
+	}
+	if !foundPrepareLaunch {
+		t.Fatalf("expected prepare-launch step in journal, got %#v", journal.Steps)
+	}
+}
+
+func TestRestoreExecutorPackageModePrepareLaunchFailureRollsBack(t *testing.T) {
+	dataDir := makePackageModeDataDir(t)
+	dbPath := filepath.Join(dataDir, "main.sqlite")
+	writePackageModeSQLite(t, dbPath, "before", 1)
+
+	bm := newBackupManager(dataDir)
+	created, err := bm.Create(context.Background())
+	if err != nil {
+		t.Fatalf("seed package snapshot failed: %v", err)
+	}
+	targetTS := inferTimestamp(created[0])
+
+	writePackageModeSQLite(t, dbPath, "after", 1)
+	if err := os.WriteFile(created[0], []byte("not a sqlite database"), 0o644); err != nil {
+		t.Fatalf("corrupt package snapshot failed: %v", err)
+	}
+
+	exec := newTestRestoreExecutor(bm, &fakeAppController{})
+	_, err = exec.Execute(context.Background(), targetTS, false)
+	if err == nil || !strings.Contains(err.Error(), "prepare restored snapshot") || !strings.Contains(err.Error(), "rollback succeeded") {
+		t.Fatalf("expected prepare-launch rollback error, got %v", err)
+	}
+	if readPackageModeLabel(t, dbPath) != "after" {
+		t.Fatalf("expected rollback to restore pre-restore package state, got %q", readPackageModeLabel(t, dbPath))
+	}
+}
+
+func TestRestoreExecutorRuntimeBranches(t *testing.T) {
+	t.Run("close after temporary launch quits and waits for stop", func(t *testing.T) {
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), &fakeAppController{running: []bool{true, false}})
+		if err := exec.closeAfterTemporaryLaunch(context.Background()); err != nil {
+			t.Fatalf("closeAfterTemporaryLaunch failed: %v", err)
+		}
+	})
+
+	t.Run("activate within times out", func(t *testing.T) {
+		wait := make(chan struct{})
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), &fakeAppController{activateWait: wait})
+		exec.launchTimeout = time.Millisecond
+
+		err := exec.activateWithin(context.Background(), "reopen online")
+		if err == nil || !strings.Contains(err.Error(), "timed out") {
+			t.Fatalf("expected activateWithin timeout, got %v", err)
+		}
+	})
+
+	t.Run("activate within returns direct error", func(t *testing.T) {
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), &fakeAppController{activateErr: errors.New("boom")})
+		err := exec.activateWithin(context.Background(), "reopen online")
+		if err == nil || !strings.Contains(err.Error(), "boom") {
+			t.Fatalf("expected activateWithin error, got %v", err)
+		}
+	})
+
+	t.Run("launch isolated within waits for running", func(t *testing.T) {
+		app := &fakeAppController{running: []bool{false, true}}
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), app)
+		exec.launchIsolated = func(context.Context, string) error { return nil }
+		if err := exec.launchIsolatedWithin(context.Background(), "offline launch"); err != nil {
+			t.Fatalf("launchIsolatedWithin failed: %v", err)
+		}
+	})
+
+	t.Run("launch isolated within times out", func(t *testing.T) {
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), &fakeAppController{})
+		exec.launchTimeout = time.Millisecond
+		exec.launchIsolated = func(ctx context.Context, _ string) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+
+		err := exec.launchIsolatedWithin(context.Background(), "offline launch")
+		if err == nil || !strings.Contains(err.Error(), "timed out") {
+			t.Fatalf("expected launchIsolatedWithin timeout, got %v", err)
+		}
+	})
+
+	t.Run("launch isolated within returns direct error", func(t *testing.T) {
+		exec := newTestRestoreExecutor(newBackupManager(t.TempDir()), &fakeAppController{})
+		exec.launchIsolated = func(context.Context, string) error { return errors.New("launch boom") }
+		err := exec.launchIsolatedWithin(context.Background(), "offline launch")
+		if err == nil || !strings.Contains(err.Error(), "launch boom") {
+			t.Fatalf("expected launchIsolatedWithin direct error, got %v", err)
+		}
+	})
 }
 
 func TestRestoreExecutorStableFilesTimeout(t *testing.T) {
