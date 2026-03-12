@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" role="img" aria-labelledby="title desc">
+  <title id="title">things-agent interaction schema</title>
+  <desc id="desc">A clean left-to-right schema showing user intent, an AI agent, the things-agent CLI, and Things 3, plus the safety contract for normal operations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7f2e8"/>
+      <stop offset="100%" stop-color="#eef4f9"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#16324f" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="700" rx="40" fill="url(#bg)"/>
+  <rect x="28" y="28" width="1544" height="644" rx="34" fill="#ffffff" opacity="0.72"/>
+
+  <g transform="translate(84 70)">
+    <rect x="0" y="0" width="170" height="44" rx="22" fill="#16324f"/>
+    <text x="85" y="29" text-anchor="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="22" font-weight="700" fill="#f8fafc">things-agent</text>
+    <text x="0" y="100" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="56" font-weight="700" fill="#16324f">How an AI agent translates intent into Things updates</text>
+  </g>
+
+  <path d="M244 208H1300" stroke="#ccd8e4" stroke-width="4" stroke-linecap="round" stroke-dasharray="6 14"/>
+  <circle cx="244" cy="208" r="7" fill="#afc0d1"/>
+  <circle cx="596" cy="208" r="7" fill="#afc0d1"/>
+  <circle cx="948" cy="208" r="7" fill="#afc0d1"/>
+  <circle cx="1300" cy="208" r="7" fill="#afc0d1"/>
+
+  <g transform="translate(84 240)" filter="url(#shadow)">
+    <rect x="0" y="0" width="320" height="202" rx="30" fill="url(#card)" stroke="#e7edf4" stroke-width="1.5"/>
+    <rect x="0" y="0" width="320" height="10" rx="30" fill="#ffefe3"/>
+    <circle cx="48" cy="46" r="22" fill="#ffe3cf"/>
+    <text x="48" y="49" text-anchor="middle" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="20" font-weight="700" fill="#aa4b16">1</text>
+    <text x="86" y="46" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="18" font-weight="700" fill="#aa4b16">ask</text>
+    <text x="26" y="106" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="39" font-weight="700" fill="#16324f">User intent</text>
+    <text x="26" y="148" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">Natural-language request.</text>
+    <text x="26" y="180" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">Goal, scope, constraints.</text>
+  </g>
+
+  <g transform="translate(436 240)" filter="url(#shadow)">
+    <rect x="0" y="0" width="320" height="202" rx="30" fill="url(#card)" stroke="#e7edf4" stroke-width="1.5"/>
+    <rect x="0" y="0" width="320" height="10" rx="30" fill="#e8f2ff"/>
+    <circle cx="48" cy="46" r="22" fill="#dcebff"/>
+    <text x="48" y="49" text-anchor="middle" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="20" font-weight="700" fill="#2f6cb3">2</text>
+    <text x="86" y="46" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="18" font-weight="700" fill="#2f6cb3">plan</text>
+    <text x="26" y="106" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="39" font-weight="700" fill="#16324f">AI agent</text>
+    <text x="26" y="148" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">Translate intent into</text>
+    <text x="26" y="180" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">things-agent commands.</text>
+  </g>
+
+  <g transform="translate(788 240)" filter="url(#shadow)">
+    <rect x="0" y="0" width="320" height="202" rx="30" fill="url(#card)" stroke="#e7edf4" stroke-width="1.5"/>
+    <rect x="0" y="0" width="320" height="10" rx="30" fill="#f0eaff"/>
+    <circle cx="48" cy="46" r="22" fill="#ede5ff"/>
+    <text x="48" y="49" text-anchor="middle" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="20" font-weight="700" fill="#5b3ea8">3</text>
+    <text x="86" y="46" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="18" font-weight="700" fill="#5b3ea8">operate</text>
+    <text x="26" y="106" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="35" font-weight="700" fill="#16324f">things-agent CLI</text>
+    <text x="26" y="148" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="22" fill="#4f647c">Constrained CLI over</text>
+    <text x="26" y="180" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="22" fill="#4f647c">AppleScript + URL Scheme.</text>
+  </g>
+
+  <g transform="translate(1140 240)" filter="url(#shadow)">
+    <rect x="0" y="0" width="320" height="202" rx="30" fill="url(#card)" stroke="#e7edf4" stroke-width="1.5"/>
+    <rect x="0" y="0" width="320" height="10" rx="30" fill="#e7f8ef"/>
+    <circle cx="48" cy="46" r="22" fill="#dff7ea"/>
+    <text x="48" y="49" text-anchor="middle" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="20" font-weight="700" fill="#2d8a57">4</text>
+    <text x="86" y="46" dominant-baseline="middle" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="18" font-weight="700" fill="#2d8a57">inspect</text>
+    <text x="26" y="106" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="39" font-weight="700" fill="#16324f">Things 3</text>
+    <text x="26" y="148" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">Visible end state.</text>
+    <text x="26" y="180" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#4f647c">User checks result.</text>
+  </g>
+
+  <g transform="translate(84 468)">
+    <rect x="0" y="0" width="1432" height="140" rx="30" fill="#16324f"/>
+    <text x="44" y="28" dominant-baseline="hanging" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="24" font-weight="700" fill="#f7fbff">Safety contract</text>
+    <text x="44" y="76" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#d8e3ee">Normal reads and writes stay on official automation surfaces.</text>
+    <text x="44" y="106" font-family="'Avenir Next', 'Avenir', 'Trebuchet MS', sans-serif" font-size="23" fill="#d8e3ee">Direct database access stays reserved for restore only.</text>
+  </g>
+</svg>

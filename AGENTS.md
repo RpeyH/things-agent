@@ -1,6 +1,6 @@
 # AGENTS - things-agent
 
-`README.md` is for the human user who asks an AI coding agent such as Codex, Claude Code, Open Code, or similar tools to operate Things. `AGENTS.md` is for the AI operator that actually runs the CLI.
+`README.md` is for the user who asks an AI coding agent such as Codex, Claude Code, Open Code, or similar tools to operate Things. `AGENTS.md` is for the AI operator that actually runs the CLI.
 
 ## Priority
 

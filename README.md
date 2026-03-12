@@ -8,13 +8,13 @@
 
 > AI-first operational bridge for Things 3 on macOS. It gives an AI agent a constrained CLI over Things' existing automation surfaces: AppleScript, the official Things URL Scheme, and a narrowly scoped internal SQLite restore harness used only for restore workflows.
 
-![things-agent opportunity map](./assets/banner.png)
+![things-agent interaction schema](./assets/interaction-schema.svg)
 
 Independent project. Not affiliated with Cultured Code.
 
 Documentation split:
 
-- `README.md`: user-facing guide for the human who asks an AI coding agent such as Codex, Claude Code, Open Code, or similar tools to manage Things through the CLI.
+- `README.md`: user-facing guide for the user who asks an AI coding agent such as Codex, Claude Code, Open Code, or similar tools to manage Things through the CLI.
 - [`AGENTS.md`](./AGENTS.md): operator contract for the AI agent that actually runs the CLI.
 
 ## Table of contents
@@ -42,7 +42,7 @@ Things already exposes useful automation surfaces, but AI agents benefit from a 
 
 This project is built for the practical path:
 
-`Human intent > AI agent > things-agent CLI > Things 3`
+`User intent > AI agent > things-agent CLI > Things 3`
 
 Normal reads and writes stay on top of AppleScript and the official Things URL Scheme.
 Internal SQLite work is reserved for restore only.
@@ -65,11 +65,11 @@ The opportunity is to show that:
 - a constrained CLI can make those workflows more explicit, verifiable, and safer to operate
 - if there were ever an official CLI with full app coverage, it could become a clean foundation for an MCP server or other agent-facing runtimes
 
-That would keep the center of gravity where it belongs: on official app behavior, official capabilities, and a safer contract between human intent, automation, and Things itself.
+That would keep the center of gravity where it belongs: on official app behavior, official capabilities, and a safer contract between user intent, automation, and Things itself.
 
 ## Project status
 
-- This project is primarily meant to be consumed by an AI agent, not used as a polished human-first CLI.
+- This project is primarily meant to be consumed by an AI agent, not used as a polished user-first CLI.
 - It is already useful in practice for organizing Things through AI, including voice-driven workflows.
 - It includes safety rails, backup/restore workflows, and verification steps, but it is not fully hardened.
 - The user still takes real risk and will likely need to grant system permissions for the setup to work reliably.
@@ -111,14 +111,14 @@ For token, permissions, and list-locale errors, see [Troubleshooting](#troublesh
 
 The primary model is:
 
-`Human > AI agent > things-agent CLI > Things 3`
+`User > AI agent > things-agent CLI > Things 3`
 
-This repository is not trying to turn Things into a general-purpose shell app for direct human use.
+This repository is not trying to turn Things into a general-purpose shell app for direct user use.
 The main goal is to give an AI agent a constrained operational bridge to read and change Things state with clearer semantics and some safety controls.
 
 In practice, this means:
 
-- the human expresses intent in natural language
+- the user expresses intent in natural language
 - the AI agent translates that intent into `things-agent` commands
 - the CLI uses AppleScript and the Things URL Scheme to operate Things 3
 - backup, restore, and verification flows try to reduce risk, but do not remove it
