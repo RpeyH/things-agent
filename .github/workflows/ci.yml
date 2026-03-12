@@ -42,9 +42,14 @@ jobs:
         run: go test -race ./... -count=1
 
       - name: upload coverage to codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.out
-          fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          if [ -z "${CODECOV_TOKEN}" ]; then
+            echo "CODECOV_TOKEN is not set; skipping Codecov upload."
+            exit 0
+          fi
+
+          python3 -m pip install --disable-pip-version-check codecov-cli
+          codecovcli upload-process --disable-search -f coverage.out -n "ci-${GITHUB_RUN_ID}" || \
+            echo "Codecov upload failed; continuing."
